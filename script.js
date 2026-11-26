@@ -2597,6 +2597,44 @@
     }
   })();
 })();
+function ensureOfflineStartWorks() {
+  const startBtn =
+    document.getElementById("btnStartGame") ||
+    document.getElementById("startGameBtn") ||
+    document.querySelector("[data-action='start-game']") ||
+    Array.from(document.querySelectorAll("button")).find((btn) =>
+      /ابدأ اللعب|start game|play/i.test(btn.textContent || "")
+    );
+
+  if (!startBtn || startBtn.dataset.offlineGuardBound === "1") return;
+  startBtn.dataset.offlineGuardBound = "1";
+
+  startBtn.addEventListener(
+    "click",
+    () => {
+      if (!navigator.onLine) {
+        const startScreen =
+          document.getElementById("startScreen") ||
+          document.getElementById("homeScreen") ||
+          document.querySelector(".start-screen");
+        const gameScreen =
+          document.getElementById("gameScreen") ||
+          document.getElementById("mainScreen") ||
+          document.getElementById("appScreen");
+
+        if (startScreen) startScreen.classList.add("hidden");
+        if (gameScreen) {
+          gameScreen.classList.remove("hidden");
+          gameScreen.style.display = "block";
+        }
+      }
+    },
+    true
+  );
+}
+
+document.addEventListener("DOMContentLoaded", ensureOfflineStartWorks);
+window.addEventListener("load", ensureOfflineStartWorks);
 
 
 
