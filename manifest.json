@@ -1,0 +1,25 @@
+{
+  "name": "Anime Card Legends - أساطير بطاقات الأنمي",
+  "short_name": "Anime Cards",
+  "description": "اجمع بطاقات الأنمي، طوّر أبطالك، وسيطر على الساحة!",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050712",
+  "theme_color": "#0f172a", 
+
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"> 
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#090b14" />
+  <title>Anime Card Legends</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon.png" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+</head>
+<body>
+  <audio id="bgmAudio" src="bgm.mp3" loop preload="auto"></audio>
+  <div id="toastBanner" class="toast-banner" aria-live="polite"></div>
+
+  <!-- شاشة البداية -->
+  <section id="startScreen" class="start-screen">
+    <div id="startBgCards" class="start-bg-cards"></div>
+    <div class="start-overlay"></div>
+    <div class="start-content">
+      <div class="emblem-box"><span class="emblem-icon">⚔️</span></div>
+      <h1 class="game-title" data-i18n="app_title">أساطير بطاقات الأنمي</h1>
+      <p class="game-subtitle" data-i18n="app_subtitle">اجمع النوادر • نافس أونلاين • انتزع العرش</p>
+
+      <div class="player-welcome-pill">
+        <span>👑</span>
+        <span id="startPlayerName">البطل الملكي</span>
+      </div>
+
+      <button id="btnStartGame" class="btn-start-glow">
+        <span>▶</span>
+        <span data-i18n="start_play">ابدأ اللعب</span>
+      </button>
+
+      <div class="start-lang-row">
+        <button class="lang-chip active" data-lang="ar">العربية</button>
+        <button class="lang-chip" data-lang="en">English</button>
+        <button class="lang-chip" data-lang="fr">Français</button>
+        <button class="lang-chip" data-lang="ja">日本語</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- هيكل اللعبة -->
+  <div id="appShell" class="app-shell hidden">
+    <header class="top-hud">
+      <button id="btnProfileHud" class="hud-profile">
+        <span id="netDot" class="net-dot online"></span>
+        <span id="hudPlayerName" class="hud-name">البطل</span>
+        <span class="hud-trophy">🏆 <b id="hudTrophies">0</b></span>
+      </button>
+
+      <div class="hud-currencies">
+        <div class="curr-pill gold"><span>🪙</span><span id="goldCount">0</span></div>
+        <div class="curr-pill gem"><span>💎</span><span id="gemCount">0</span></div>
+        <div class="curr-pill ticket"><span>🎟️</span><span id="ticketCount">0</span></div>
+      </div>
+
+      <div class="hud-actions">
+        <button id="btnAudioToggle" class="icon-btn" aria-label="Audio">🔊</button>
+        <button id="btnSettings" class="icon-btn" aria-label="Settings">⚙️</button>
+      </div>
+    </header>
+
+    <main class="main-stage">
+      <!-- 1. الساحة الفردية -->
+      <section id="viewArena" class="tab-view active">
+        <div class="sub-nav">
+          <button class="sub-tab active" data-solo="shuffle" data-i18n="solo_shuffle">🎴 نزال الـ 6 بطاقات</button>
+          <button class="sub-tab" data-solo="trivia" data-i18n="solo_trivia">🧠 ألغاز الأنمي</button>
+          <button class="sub-tab" data-solo="pop" data-i18n="solo_pop">🔥 تحدي الشعبية</button>
+        </div>
+
+        <div id="soloShufflePane" class="solo-pane active">
+          <div class="panel-card">
+            <div class="panel-head">
+              <h2 data-i18n="shuffle_title">نزال الذاكرة (6 بطاقات)</h2>
+              <span id="soloShuffleStatus" class="status-badge" data-i18n="shuffle_ready">اختر الصعوبة وابدأ</span>
+            </div>
+            <div class="difficulty-row">
+              <button class="diff-btn active" data-diff="normal" data-i18n="diff_normal">عادي (+2 💎)</button>
+              <button class="diff-btn" data-diff="hard" data-i18n="diff_hard">صعب (+3 💎)</button>
+              <button class="diff-btn" data-diff="legendary" data-i18n="diff_legend">أسطوري (+4 💎)</button>
+            </div>
+            <div class="score-strip">
+              <span><span data-i18n="lbl_you">أنت</span>: <b id="soloPlayerPicks">0/3</b></span>
+              <span id="soloRoundHint" data-i18n="shuffle_hint">احفظ مواقع البطاقات!</span>
+              <span><span data-i18n="lbl_opp">الخصم</span>: <b id="soloBotPicks">0/3</b></span>
+            </div>
+            <div id="soloBoard" class="cards-board-6"></div>
+            <button id="btnStartSoloShuffle" class="primary-btn full-w" data-i18n="btn_start_duel">⚡ ابدأ النزال</button>
+          </div>
+        </div>
+
+        <div id="soloTriviaPane" class="solo-pane">
+          <div class="panel-card">
+            <div class="panel-head">
+              <h2 data-i18n="trivia_title">ألغاز الشخصيات والقصص</h2>
+              <span class="status-badge"><span data-i18n="lbl_streak">السلسلة</span>: <b id="triviaStreak">0</b> 🔥</span>
+            </div>
+            <div class="difficulty-row">
+              <button class="trivia-mode-btn active" data-tmode="image" data-i18n="tmode_img">🖼️ صورة</button>
+              <button class="trivia-mode-btn" data-tmode="silhouette" data-i18n="tmode_sil">👤 ظل غامض</button>
+              <button class="trivia-mode-btn" data-tmode="lore" data-i18n="tmode_lore">📜 قصة / وصف</button>
+            </div>
+            <div id="triviaMediaBox" class="trivia-media-box">
+              <img id="triviaImg" src="" alt="Quiz" />
+              <p id="triviaLoreText" class="trivia-lore hidden"></p>
+            </div>
+            <p id="triviaPrompt" class="trivia-prompt" data-i18n="trivia_who">من هي هذه الشخصية؟</p>
+            <div id="triviaOptions" class="trivia-options"></div>
+            <div class="trivia-tools">
+              <button id="btnTrivia5050" class="secondary-btn" data-i18n="btn_5050">✂️ حذف إجابتين</button>
+              <button id="btnTriviaSkip" class="secondary-btn" data-i18n="btn_skip">⏭️ سؤال جديد</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="soloPopPane" class="solo-pane">
+          <div class="panel-card">
+            <div class="panel-head">
+              <h2 data-i18n="pop_title">أي شخصية أكثر شعبية؟</h2>
+              <span class="status-badge">+120 🪙 / +1 💎</span>
+            </div>
+            <div id="popDuelContainer" class="pop-duel-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. النزالات أونلاين (واجهة احترافية داكنة بدون قائمة بيضاء) -->
+      <section id="viewOnline" class="tab-view">
+        <div class="sub-nav">
+          <button class="sub-tab active" data-online="lobby" data-i18n="online_tab_arena">⚔️ ساحة 1 ضد 1</button>
+          <button class="sub-tab" data-online="challenges"><span data-i18n="online_tab_challenges">📩 التحديات</span> <span id="incomingBadge" class="mini-badge hidden">0</span></button>
+          <button class="sub-tab" data-online="leaders" data-i18n="online_tab_leaders">🏆 المتصدرون</button>
+        </div>
+
+        <div id="onlineLobbyPane" class="online-pane active">
+          <div id="roomSetupBox" class="panel-card pro-duel-panel">
+            <div class="duel-hero-header">
+              <span class="duel-crown-ico">⚔️</span>
+              <div>
+                <h2 data-i18n="online_title">نزال الـ 6 بطاقات المباشر</h2>
+                <p class="muted-text" data-i18n="online_sub">اختر نمط المواجهة وتحدّ خصمك بكود الغرفة المباشر</p>
+              </div>
+            </div>
+
+            <label class="field-label" data-i18n="lbl_duel_mode">اختر نوع المواجهة:</label>
+            <div id="duelModeCards" class="duel-mode-grid">
+              <button type="button" class="duel-mode-card active" data-mode="safe">
+                <span class="dm-icon">🛡️</span>
+                <div class="dm-text">
+                  <strong data-i18n="mode_safe_title">نزال آمن</strong>
+                  <small data-i18n="mode_safe_desc">ذهب + جواهر + كؤوس بدون مخاطرة</small>
+                </div>
+                <span class="dm-check">✓</span>
+              </button>
+
+              <button type="button" class="duel-mode-card" data-mode="stake_gems">
+                <span class="dm-icon">💎</span>
+                <div class="dm-text">
+                  <strong data-i18n="mode_gems_title">رهان الجواهر</strong>
+                  <small data-i18n="mode_gems_desc">30 💎 للفائز بموافقة الطرفين</small>
+                </div>
+                <span class="dm-check">✓</span>
+              </button>
+
+              <button type="button" class="duel-mode-card" data-mode="stake_card">
+                <span class="dm-icon">🔥</span>
+                <div class="dm-text">
+                  <strong data-i18n="mode_card_title">رهان بطاقة نادرة</strong>
+                  <small data-i18n="mode_card_desc">مواجهة مصيرية على بطاقات النوادر</small>
+                </div>
+                <span class="dm-check">✓</span>
+              </button>
+            </div>
+
+            <!-- منتقي بطاقة الرهان المرئي الداكن -->
+            <div id="myStakeCardPicker" class="stake-picker-panel hidden">
+              <label class="field-label" data-i18n="lbl_pick_stake">اضغط على بطاقتك النادرة للرهان:</label>
+              <div id="myStakeCardsRow" class="stake-cards-strip"></div>
+            </div>
+
+            <div class="online-actions-grid">
+              <button id="btnCreateRoom" class="primary-btn full-w" data-i18n="btn_create_room">➕ إنشاء غرفة نزال جديدة</button>
+              <div class="join-box">
+                <input id="inputRoomCode" type="tel" maxlength="4" data-i18n-placeholder="ph_room_code" placeholder="كود من 4 أرقام" class="dark-input" />
+                <button id="btnJoinRoom" class="accent-btn" data-i18n="btn_join_room">دخول</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="activeDuelBox" class="panel-card hidden">
+            <div class="panel-head">
+              <div class="row-gap">
+                <span class="status-badge"><span data-i18n="lbl_room_code">الكود</span>: <b id="activeRoomCode" style="font-size:1.05rem;color:#f5c542;">----</b></span>
+                <span id="activeDuelModeTag" class="status-badge">🛡️</span>
+              </div>
+              <button id="btnLeaveRoom" class="danger-btn-sm" data-i18n="btn_leave">خروج</button>
+            </div>
+
+            <div class="duel-players-bar">
+              <div class="d-player">
+                <b id="p1NameLabel">P1</b>
+                <span id="p1StakeLabel" class="muted-text">---</span>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="d-player">
+                <b id="p2NameLabel">...</b>
+                <span id="p2StakeLabel" class="muted-text">---</span>
+              </div>
+            </div>
+
+            <div id="mutualConsentBar" class="consent-box hidden">
+              <p data-i18n="consent_warn">⚠️ نزال رهان: يتطلب موافقة الطرفين قبل البدء</p>
+              <div class="consent-btns">
+                <button id="btnConfirmConsent" class="primary-btn" data-i18n="btn_agree">✅ أوافق على الرهان</button>
+                <button id="btnDeclineConsent" class="danger-btn-sm" data-i18n="btn_cancel">❌ إلغاء</button>
+              </div>
+            </div>
+
+            <div id="onlineDuelStatus" class="round-banner">...</div>
+            <div id="onlineBoard" class="cards-board-6"></div>
+          </div>
+        </div>
+
+        <div id="onlineChallengesPane" class="online-pane">
+          <div class="panel-card">
+            <h2 data-i18n="ch_title">📩 تحديات البطاقات النادرة</h2>
+            <p class="muted-text" data-i18n="ch_desc">عندما يتحداك لاعب من سجل النوادر على بطاقتك، يظهر التحدي هنا.</p>
+            <div id="challengesList" class="stack-list"></div>
+          </div>
+        </div>
+
+        <div id="onlineLeadersPane" class="online-pane">
+          <div class="panel-card">
+            <h2 data-i18n="lead_title">🏆 أبطال السيرفر (Top 20)</h2>
+            <div id="leaderboardList" class="stack-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. المتجر (نظيف وبدون إظهار نسب النوادر) -->
+      <section id="viewShop" class="tab-view">
+        <div class="section-header">
+          <h2 data-i18n="shop_title">🛒 متجر الحزم الأسطورية</h2>
+          <p class="muted-text" data-i18n="shop_sub">استدعِ أعظم شخصيات الأنمي — النوادر الحقيقية لا تظهر إلا للمحظوظين!</p>
+        </div>
+        <div id="shopPacksGrid" class="shop-grid"></div>
+      </section>
+
+      <!-- 4. بطاقاتي (مخزون لا نهائي) -->
+      <section id="viewCards" class="tab-view">
+        <div class="section-header row-between">
+          <h2>🎴 <span data-i18n="inv_title">بطاقاتي</span> (<span id="invTotalCount">0</span>)</h2>
+          <span class="status-badge" data-i18n="inv_unlimited">∞ مخزون مفتوح</span>
+        </div>
+
+        <div class="filter-bar">
+          <input id="invSearch" type="search" data-i18n-placeholder="ph_search_cards" placeholder="🔍 ابحث بالاسم أو الأنمي..." class="dark-input" />
+          <div id="invRarityFilters" class="rarity-chips">
+            <button class="r-chip active" data-r="ALL" data-i18n="filter_all">الكل</button>
+            <button class="r-chip" data-r="SP">SP</button>
+            <button class="r-chip" data-r="UR">UR</button>
+            <button class="r-chip" data-r="SSR">SSR</button>
+            <button class="r-chip" data-r="SR">SR</button>
+            <button class="r-chip" data-r="R">R</button>
+            <button class="r-chip" data-r="C">C</button>
+            <button class="r-chip" data-r="N">N</button>
+          </div>
+        </div>
+
+        <div id="invGrid" class="cards-grid"></div>
+        <div id="invLoadMoreBox" class="load-more-box hidden">
+          <button id="btnLoadMoreInv" class="secondary-btn" data-i18n="btn_load_more">عرض المزيد ⬇️</button>
+        </div>
+      </section>
+
+      <!-- 5. سجل النوادر (عدد مجهول ويتوسع تلقائياً مع واجهة احترافية) -->
+      <section id="viewCodex" class="tab-view">
+        <div class="section-header row-between">
+          <div>
+            <h2 data-i18n="codex_title">👑 سجل النوادر المكتشفة</h2>
+            <p class="muted-text" data-i18n="codex_sub">اضغط على أي بطاقة لقراءة ملفها الكامل أو تحدي مالكها</p>
+          </div>
+          <span class="status-badge codex-mystery-badge"><b id="codexDiscoveredCount">0</b> / ???</span>
+        </div>
+
+        <div class="filter-bar">
+          <input id="codexSearch" type="search" data-i18n-placeholder="ph_search_rare" placeholder="🔍 ابحث في النوادر المكتشفة..." class="dark-input" />
+          <div id="codexRarityFilters" class="rarity-chips">
+            <button class="r-chip active" data-cr="ALL" data-i18n="filter_all">الكل</button>
+            <button class="r-chip" data-cr="SP">SP (1/1)</button>
+            <button class="r-chip" data-cr="UR">UR (3/3)</button>
+            <button class="r-chip" data-cr="SSR">SSR (10/10)</button>
+          </div>
+        </div>
+
+        <div id="codexGrid" class="codex-cards-grid"></div>
+      </section>
+    </main>
+
+    <!-- شريط التنقل السفلي -->
+    <nav id="bottomNav" class="bottom-nav">
+      <button class="nav-btn active" data-tab="viewArena">
+        <span class="nav-ico">⚔️</span>
+        <span data-i18n="nav_arena">الساحة</span>
+      </button>
+      <button class="nav-btn" data-tab="viewOnline">
+        <span class="nav-ico">🌐</span>
+        <span data-i18n="nav_online">أونلاين</span>
+        <span id="navOnlineDot" class="nav-alert hidden"></span>
+      </button>
+      <button class="nav-btn" data-tab="viewShop">
+        <span class="nav-ico">🛒</span>
+        <span data-i18n="nav_shop">المتجر</span>
+      </button>
+      <button class="nav-btn" data-tab="viewCards">
+        <span class="nav-ico">🎴</span>
+        <span data-i18n="nav_cards">بطاقاتي</span>
+      </button>
+      <button class="nav-btn" data-tab="viewCodex">
+        <span class="nav-ico">👑</span>
+        <span data-i18n="nav_codex">النوادر</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- نافذة الاستدعاء -->
+  <div id="summonModal" class="modal hidden">
+    <div class="modal-card summon-reveal">
+      <h3 id="summonHeadline">✨</h3>
+      <div id="summonCardStage" class="summon-stage"></div>
+      <p id="summonNote" class="muted-text"></p>
+      <button id="btnCloseSummon" class="primary-btn full-w" data-i18n="btn_claim">رائع! استلام</button>
+    </div>
+  </div>
+
+  <!-- نافذة ملف البطاقة الاحترافي (المعلومات المفصلة + القصة المترجمة + التحدي) -->
+  <div id="cardModal" class="modal hidden">
+    <div class="modal-card pro-dossier-modal">
+      <div class="modal-head">
+        <h3 id="cardModalTitle">---</h3>
+        <button id="btnCloseCardModal" class="icon-btn">✖️</button>
+      </div>
+      <div id="cardModalBody"></div>
+    </div>
+  </div>
+
+  <!-- نافذة الإعدادات -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 data-i18n="set_title">⚙️ الإعدادات والملف الشخصي</h3>
+        <button id="btnCloseSettings" class="icon-btn">✖️</button>
+      </div>
+      <div class="settings-body">
+        <label class="field-label" data-i18n="set_name">اسم اللاعب في السيرفر:</label>
+        <div class="row-gap">
+          <input id="inputPlayerName" type="text" maxlength="18" class="dark-input" />
+          <button id="btnSavePlayerName" class="primary-btn" data-i18n="btn_save">حفظ</button>
+        </div>
+
+        <label class="field-label" style="margin-top:12px;" data-i18n="set_lang">اللغة / Language:</label>
+        <div class="start-lang-row">
+          <button class="lang-chip" data-lang="ar">العربية</button>
+          <button class="lang-chip" data-lang="en">English</button>
+          <button class="lang-chip" data-lang="fr">Français</button>
+          <button class="lang-chip" data-lang="ja">日本語</button>
+        </div>
+
+        <div class="toggle-row" style="margin-top:14px;">
+          <span data-i18n="set_bgm">🎵 موسيقى الخلفية</span>
+          <input type="checkbox" id="chkBgm" checked />
+        </div>
+        <div class="toggle-row">
+          <span data-i18n="set_sfx">🔔 المؤثرات الصوتية</span>
+          <input type="checkbox" id="chkSfx" checked />
+        </div>
+
+        <div class="info-box" style="margin-top:14px;">
+          <p>🆔 <span data-i18n="set_uid">معرّف الحساب</span>: <code id="settingsUid">---</code></p>
+          <p>🛡️ <span data-i18n="set_shield">درع الحماية</span>: <b id="settingsShield">---</b></p>
+          <p>🌐 <span data-i18n="set_pool">الشخصيات المحمّلة</span>: <b id="settingsCatalogCount">0</b></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

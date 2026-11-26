@@ -1,0 +1,375 @@
+:root {
+  --bg-deep: #070912;
+  --bg-card: #11162a;
+  --bg-card-2: #18203a;
+  --border-soft: rgba(255, 255, 255, 0.09);
+  --gold: #f5c542;
+  --gold-glow: rgba(245, 197, 66, 0.35);
+  --gem: #38bdf8;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(circle at top, #121831 0%, var(--bg-deep) 65%);
+  color: var(--text-main);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+.hidden { display: none !important; }
+
+/* الإشعارات */
+.toast-banner {
+  position: fixed; top: -85px; left: 50%; transform: translateX(-50%);
+  background: rgba(15, 20, 38, 0.97); border: 1px solid var(--gold); color: #fff;
+  padding: 10px 18px; border-radius: 999px; font-size: 0.88rem; font-weight: 700;
+  z-index: 9999; box-shadow: 0 10px 28px rgba(0,0,0,0.65); max-width: 92vw; text-align: center;
+  transition: top 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.toast-banner.show { top: 14px; }
+
+/* شاشة البداية */
+.start-screen {
+  position: fixed; inset: 0; z-index: 500; overflow: hidden;
+  background: radial-gradient(circle at center, #171e3b 0%, #060810 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.start-bg-cards {
+  position: absolute; inset: -24px; display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 14px; opacity: 0.24; transform: rotate(-8deg) scale(1.08); pointer-events: none;
+}
+.start-bg-cards img { width: 100%; height: 170px; object-fit: cover; border-radius: 14px; border: 1px solid rgba(245,197,66,0.4); }
+.start-overlay { position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(7,9,18,0.42) 0%, rgba(7,9,18,0.94) 85%); }
+.start-content { position: relative; z-index: 2; text-align: center; padding: 24px; max-width: 420px; width: 100%; }
+.emblem-box {
+  width: 84px; height: 84px; margin: 0 auto 18px; border-radius: 24px;
+  background: linear-gradient(145deg, #1e2647, #0d1122); border: 2px solid var(--gold);
+  display: flex; align-items: center; justify-content: center; font-size: 2.4rem;
+  box-shadow: 0 0 32px var(--gold-glow);
+}
+.game-title { font-size: 1.9rem; font-weight: 900; color: var(--gold); text-shadow: 0 4px 18px var(--gold-glow); margin-bottom: 8px; }
+.game-subtitle { color: var(--text-muted); font-size: 0.92rem; margin-bottom: 18px; }
+.player-welcome-pill {
+  display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border-soft); padding: 6px 15px; border-radius: 999px; font-size: 0.86rem; margin-bottom: 22px;
+}
+.btn-start-glow {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: 82%; max-width: 270px; padding: 15px 24px; border-radius: 999px;
+  border: 2px solid var(--gold); background: linear-gradient(135deg, #1d2445, #0e1326);
+  color: var(--gold); font-size: 1.15rem; font-weight: 800; cursor: pointer;
+  box-shadow: 0 0 28px var(--gold-glow); transition: transform 0.18s ease;
+}
+.btn-start-glow:active { transform: scale(0.96); }
+.start-lang-row { display: flex; justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+.lang-chip {
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border-soft);
+  color: var(--text-muted); padding: 6px 13px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+}
+.lang-chip.active { border-color: var(--gold); color: var(--gold); background: rgba(245,197,66,0.14); }
+
+/* الهيكل والشريط العلوي */
+.app-shell { display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: 74px; }
+.top-hud {
+  position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; padding: 10px 12px; background: rgba(7,9,18,0.94); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-soft);
+}
+.hud-profile {
+  display: flex; align-items: center; gap: 6px; background: var(--bg-card);
+  border: 1px solid var(--border-soft); color: #fff; padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; cursor: pointer;
+}
+.net-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+.net-dot.offline { background: #ef4444; }
+.hud-name { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.hud-currencies { display: flex; align-items: center; gap: 5px; }
+.curr-pill {
+  display: flex; align-items: center; gap: 4px; background: var(--bg-card);
+  border: 1px solid var(--border-soft); padding: 5px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 700;
+}
+.curr-pill.gold { border-color: rgba(245,197,66,0.35); color: var(--gold); }
+.curr-pill.gem { border-color: rgba(56,189,248,0.35); color: var(--gem); }
+.curr-pill.ticket { border-color: rgba(244,63,94,0.35); color: #fb7185; }
+.hud-actions { display: flex; gap: 5px; }
+.icon-btn {
+  background: var(--bg-card); border: 1px solid var(--border-soft); color: #fff;
+  width: 34px; height: 34px; border-radius: 10px; cursor: pointer; font-size: 0.95rem;
+}
+
+.main-stage { flex: 1; padding: 12px; max-width: 680px; width: 100%; margin: 0 auto; }
+.tab-view { display: none; }
+.tab-view.active { display: block; animation: fadeIn 0.22s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+.sub-nav { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+.sub-tab {
+  flex: 1; white-space: nowrap; background: var(--bg-card); border: 1px solid var(--border-soft);
+  color: var(--text-muted); padding: 9px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+}
+.sub-tab.active { background: rgba(245,197,66,0.14); border-color: var(--gold); color: var(--gold); }
+.mini-badge { background: #f43f5e; color: #fff; padding: 1px 6px; border-radius: 999px; font-size: 0.7rem; margin-inline-start: 4px; }
+.solo-pane, .online-pane { display: none; }
+.solo-pane.active, .online-pane.active { display: block; }
+
+.panel-card {
+  background: linear-gradient(160deg, #131930 0%, #0e1326 100%);
+  border: 1px solid var(--border-soft); border-radius: 18px; padding: 14px; margin-bottom: 12px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.28);
+}
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.panel-head h2 { font-size: 1.02rem; }
+.status-badge { background: var(--bg-card-2); border: 1px solid var(--border-soft); padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; color: var(--gold); font-weight: 700; }
+.muted-text { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; }
+
+/* واجهة النزال الاحترافية الداكنة (بديل القائمة البيضاء) */
+.pro-duel-panel { border-color: rgba(245, 197, 66, 0.25); }
+.duel-hero-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.duel-crown-ico {
+  width: 46px; height: 46px; border-radius: 14px; background: rgba(245,197,66,0.14);
+  border: 1px solid rgba(245,197,66,0.45); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;
+}
+.duel-mode-grid { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
+.duel-mode-card {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: start;
+  background: rgba(24, 32, 58, 0.78); border: 1.5px solid var(--border-soft); color: #fff;
+  padding: 12px 14px; border-radius: 14px; cursor: pointer; transition: all 0.2s ease;
+}
+.duel-mode-card .dm-icon {
+  width: 38px; height: 38px; border-radius: 11px; background: rgba(255,255,255,0.06);
+  display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;
+}
+.duel-mode-card .dm-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.duel-mode-card .dm-text strong { font-size: 0.92rem; color: #fff; }
+.duel-mode-card .dm-text small { font-size: 0.76rem; color: var(--text-muted); }
+.duel-mode-card .dm-check {
+  width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-soft);
+  display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: transparent;
+}
+.duel-mode-card.active {
+  background: linear-gradient(135deg, rgba(245,197,66,0.16), rgba(24,32,58,0.95));
+  border-color: var(--gold); box-shadow: 0 0 18px rgba(245,197,66,0.18);
+}
+.duel-mode-card.active .dm-check { background: var(--gold); border-color: var(--gold); color: #090b14; font-weight: 900; }
+
+.stake-picker-panel { background: rgba(7,9,18,0.55); border: 1px solid var(--border-soft); border-radius: 14px; padding: 10px; margin-bottom: 12px; }
+.stake-cards-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.stake-mini-card {
+  width: 78px; flex-shrink: 0; background: var(--bg-card-2); border: 2px solid var(--border-soft);
+  border-radius: 10px; overflow: hidden; cursor: pointer; text-align: center;
+}
+.stake-mini-card.selected { border-color: var(--gold); box-shadow: 0 0 14px var(--gold-glow); }
+.stake-mini-card img { width: 100%; height: 82px; object-fit: cover; display: block; }
+.stake-mini-card span { display: block; font-size: 0.66rem; padding: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* لوحة 6 بطاقات */
+.difficulty-row { display: flex; gap: 6px; margin-bottom: 12px; }
+.diff-btn, .trivia-mode-btn {
+  flex: 1; background: var(--bg-card-2); border: 1px solid var(--border-soft);
+  color: var(--text-muted); padding: 8px 6px; border-radius: 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+}
+.diff-btn.active, .trivia-mode-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(245,197,66,0.12); }
+.score-strip { display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-2); padding: 8px 12px; border-radius: 10px; font-size: 0.82rem; margin-bottom: 12px; }
+
+.cards-board-6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.duel-slot { aspect-ratio: 3 / 4.2; perspective: 800px; cursor: pointer; transition: transform 0.25s ease; }
+.duel-slot.shuffling { animation: pulseShuffle 0.35s ease-in-out infinite alternate; }
+@keyframes pulseShuffle { from { transform: scale(0.95) rotate(-2deg); } to { transform: scale(1.03) rotate(2deg); } }
+
+.duel-card-inner {
+  position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: hidden;
+  border: 2px solid var(--border-soft); background: var(--bg-card-2); display: flex; flex-direction: column; justify-content: space-between;
+}
+.duel-card-inner.face-down { background: radial-gradient(circle, #22294a 0%, #101426 100%); border-color: rgba(245,197,66,0.45); align-items: center; justify-content: center; }
+.duel-card-inner.face-down::after { content: "⚔️"; font-size: 1.8rem; opacity: 0.7; }
+.duel-card-inner img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+.card-rarity-pill {
+  position: relative; z-index: 2; align-self: flex-start; margin: 5px;
+  padding: 2px 7px; border-radius: 6px; font-size: 0.68rem; font-weight: 900; color: #090b14; background: var(--gold);
+}
+.card-bottom-label {
+  position: relative; z-index: 2; background: linear-gradient(to top, rgba(0,0,0,0.94), transparent);
+  padding: 14px 6px 5px; font-size: 0.72rem; font-weight: 700; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.picked-me { box-shadow: 0 0 0 3px #22c55e; }
+.picked-opp { box-shadow: 0 0 0 3px #f43f5e; }
+
+.r-N { background: #94a3b8; color: #090b14; }
+.r-C { background: #4ade80; color: #090b14; }
+.r-R { background: #38bdf8; color: #090b14; }
+.r-SR { background: #c084fc; color: #090b14; }
+.r-SSR { background: #f59e0b; color: #090b14; }
+.r-UR { background: #fb7185; color: #fff; }
+.r-SP { background: linear-gradient(135deg, #f5c542, #ff4d8d, #38bdf8); color: #fff; }
+
+/* الأزرار */
+.primary-btn, .secondary-btn, .accent-btn, .danger-btn-sm { border: none; border-radius: 12px; padding: 11px 16px; font-weight: 800; font-size: 0.88rem; cursor: pointer; }
+.primary-btn { background: linear-gradient(135deg, #f5c542, #d99b1e); color: #090b14; }
+.secondary-btn { background: var(--bg-card-2); border: 1px solid var(--border-soft); color: #fff; }
+.accent-btn { background: var(--gem); color: #090b14; }
+.danger-btn-sm { background: rgba(244,63,94,0.18); border: 1px solid #f43f5e; color: #fda4af; padding: 6px 12px; font-size: 0.78rem; }
+.full-w { width: 100%; }
+
+/* الألغاز والشعبية */
+.trivia-media-box { width: 100%; min-height: 195px; background: var(--bg-card-2); border-radius: 14px; display: flex; align-items: center; justify-content: center; padding: 12px; margin-bottom: 10px; }
+.trivia-media-box img { width: 155px; height: 190px; object-fit: cover; border-radius: 12px; border: 2px solid var(--gold); transition: filter 0.3s ease; }
+.trivia-media-box img.silhouette { filter: brightness(0) invert(0.12) drop-shadow(0 0 6px rgba(245,197,66,0.5)); }
+.trivia-lore { font-size: 0.88rem; line-height: 1.65; text-align: center; color: #e2e8f0; }
+.trivia-prompt { text-align: center; font-weight: 800; margin-bottom: 10px; }
+.trivia-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.opt-btn { background: var(--bg-card-2); border: 1px solid var(--border-soft); color: #fff; padding: 11px 8px; border-radius: 10px; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+.opt-btn.correct { background: rgba(34,197,94,0.25); border-color: #22c55e; }
+.opt-btn.wrong { background: rgba(239,68,68,0.25); border-color: #ef4444; }
+.opt-btn.eliminated { opacity: 0.22; pointer-events: none; }
+.trivia-tools { display: flex; gap: 8px; }
+.trivia-tools button { flex: 1; font-size: 0.78rem; }
+
+.pop-duel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pop-card { background: var(--bg-card-2); border: 2px solid var(--border-soft); border-radius: 14px; overflow: hidden; text-align: center; cursor: pointer; }
+.pop-card img { width: 100%; height: 195px; object-fit: cover; }
+.pop-card-info { padding: 8px; }
+
+/* المتجر والمخزون */
+.section-header { margin-bottom: 12px; }
+.section-header h2 { font-size: 1.08rem; margin-bottom: 4px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.shop-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.pack-card {
+  background: linear-gradient(145deg, #151b33, #0e1326); border: 1px solid var(--border-soft);
+  border-radius: 16px; padding: 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.pack-info h3 { font-size: 0.96rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.pack-desc { font-size: 0.76rem; color: var(--text-muted); }
+.pack-btns { display: flex; flex-direction: column; gap: 6px; min-width: 96px; }
+.buy-btn { border: none; border-radius: 10px; padding: 9px 10px; font-weight: 800; font-size: 0.82rem; cursor: pointer; }
+.buy-btn.gold { background: var(--gold); color: #090b14; }
+.buy-btn.gem { background: var(--gem); color: #090b14; }
+
+.filter-bar { margin-bottom: 12px; }
+.dark-input {
+  width: 100%; background: var(--bg-card); border: 1px solid var(--border-soft);
+  color: #fff; padding: 10px 12px; border-radius: 12px; font-size: 0.85rem; margin-bottom: 8px;
+}
+.rarity-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.r-chip {
+  background: var(--bg-card); border: 1px solid var(--border-soft); color: var(--text-muted);
+  padding: 5px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.r-chip.active { border-color: var(--gold); color: var(--gold); background: rgba(245,197,66,0.14); }
+
+.cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.inv-card {
+  position: relative; aspect-ratio: 3 / 4.25; border-radius: 13px; overflow: hidden;
+  background: var(--bg-card); border: 1.5px solid var(--border-soft); cursor: pointer;
+}
+.inv-card img { width: 100%; height: 100%; object-fit: cover; }
+.inv-card-top { position: absolute; top: 5px; left: 5px; right: 5px; display: flex; justify-content: space-between; align-items: center; }
+.serial-tag {
+  background: rgba(7,9,18,0.88); color: var(--gold); border: 1px solid rgba(245,197,66,0.55);
+  padding: 1px 6px; border-radius: 6px; font-size: 0.65rem; font-weight: 800;
+}
+.inv-card-name {
+  position: absolute; bottom: 0; inset-inline: 0; background: linear-gradient(to top, rgba(0,0,0,0.95), transparent);
+  padding: 16px 5px 6px; font-size: 0.72rem; font-weight: 700; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.load-more-box { text-align: center; margin-top: 14px; }
+
+/* سجل النوادر الاحترافي (بطاقات قابلة للفتح + عدّاد مجهول) */
+.codex-mystery-badge { background: rgba(245,197,66,0.16); border-color: var(--gold); font-size: 0.84rem; padding: 6px 12px; }
+.codex-cards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
+.codex-card {
+  position: relative; border-radius: 16px; overflow: hidden; background: var(--bg-card);
+  border: 1.5px solid rgba(245,197,66,0.28); cursor: pointer; transition: transform 0.18s ease;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+}
+.codex-card:active { transform: scale(0.97); }
+.codex-card.tier-SP { border-color: #f5c542; box-shadow: 0 0 18px rgba(245,197,66,0.28); }
+.codex-card.tier-UR { border-color: #fb7185; box-shadow: 0 0 14px rgba(251,113,133,0.22); }
+.codex-card-img { width: 100%; height: 195px; object-fit: cover; display: block; }
+.codex-card-body { padding: 9px 10px 10px; background: linear-gradient(180deg, #131930, #0c1020); }
+.codex-card-body h4 { font-size: 0.88rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.codex-card-body .anime-sub { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.codex-card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; font-size: 0.7rem; }
+.codex-mystery-slot {
+  border-radius: 16px; border: 1.5px dashed rgba(245,197,66,0.32); background: rgba(17,22,42,0.55);
+  min-height: 255px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 14px; text-align: center; color: var(--text-muted);
+}
+.codex-mystery-slot span { font-size: 2.1rem; color: var(--gold); opacity: 0.7; }
+
+/* قوائم أونلاين */
+.stack-list { display: flex; flex-direction: column; gap: 10px; }
+.codex-item { background: var(--bg-card-2); border: 1px solid var(--border-soft); border-radius: 14px; padding: 10px; display: flex; gap: 10px; align-items: center; }
+.codex-meta { flex: 1; min-width: 0; }
+.online-actions-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.join-box { display: flex; gap: 8px; }
+.join-box .dark-input { margin-bottom: 0; flex: 1; text-align: center; font-weight: 800; letter-spacing: 2px; }
+.duel-players-bar { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card-2); padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; }
+.d-player { display: flex; flex-direction: column; font-size: 0.82rem; }
+.vs-badge { background: var(--gold); color: #090b14; font-weight: 900; padding: 4px 9px; border-radius: 8px; font-size: 0.8rem; }
+.consent-box { background: rgba(245,158,11,0.14); border: 1px solid #f59e0b; border-radius: 12px; padding: 10px; margin-bottom: 10px; text-align: center; }
+.consent-btns { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.round-banner { text-align: center; font-weight: 800; font-size: 0.86rem; color: var(--gold); padding: 8px; background: rgba(245,197,66,0.08); border-radius: 10px; margin-bottom: 10px; }
+
+/* الشريط السفلي */
+.bottom-nav {
+  position: fixed; bottom: 0; inset-inline: 0; height: 64px; z-index: 120;
+  background: rgba(7,9,18,0.96); backdrop-filter: blur(12px); border-top: 1px solid var(--border-soft); display: flex;
+}
+.nav-btn {
+  flex: 1; position: relative; background: transparent; border: none; color: var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 0.72rem; font-weight: 700; cursor: pointer;
+}
+.nav-btn.active { color: var(--gold); }
+.nav-ico { font-size: 1.2rem; }
+.nav-alert { position: absolute; top: 8px; right: 26%; width: 8px; height: 8px; border-radius: 50%; background: #f43f5e; }
+
+/* النوافذ المنبثقة + ملف البطاقة الاحترافي (Dossier Modal) */
+.modal { position: fixed; inset: 0; background: rgba(4,6,12,0.88); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; padding: 14px; z-index: 800; }
+.modal-card {
+  background: linear-gradient(160deg, #151b34, #0c1020); border: 1px solid rgba(245,197,66,0.38);
+  border-radius: 20px; padding: 16px; width: 100%; max-width: 420px; max-height: 88dvh; overflow-y: auto;
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
+.summon-reveal { text-align: center; }
+.summon-stage {
+  width: 190px; height: 260px; margin: 14px auto; border-radius: 16px; overflow: hidden;
+  border: 3px solid var(--gold); box-shadow: 0 0 32px var(--gold-glow); position: relative;
+  animation: popReveal 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes popReveal { 0% { transform: scale(0.4) rotateY(180deg); opacity: 0; } 100% { transform: scale(1) rotateY(0deg); opacity: 1; } }
+.summon-stage img { width: 100%; height: 100%; object-fit: cover; }
+
+.dossier-hero { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.dossier-poster {
+  width: 118px; height: 162px; object-fit: cover; border-radius: 14px;
+  border: 2px solid var(--gold); box-shadow: 0 0 20px var(--gold-glow); flex-shrink: 0;
+}
+.dossier-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.dossier-native { font-size: 0.78rem; color: var(--gold); opacity: 0.9; }
+.dossier-stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.dossier-stat-box { background: var(--bg-card-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 6px 8px; font-size: 0.74rem; }
+.dossier-stat-box b { display: block; color: var(--gold); font-size: 0.84rem; margin-top: 2px; }
+.dossier-lore-box {
+  background: rgba(7,9,18,0.6); border: 1px solid var(--border-soft); border-radius: 14px;
+  padding: 11px 12px; font-size: 0.82rem; line-height: 1.65; color: #e2e8f0; margin-bottom: 12px;
+}
+.dossier-owners-section { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.dossier-owner-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--bg-card-2); border: 1px solid var(--border-soft); padding: 8px 10px; border-radius: 11px; font-size: 0.8rem;
+}   
+
+.field-label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; }
+.row-gap { display: flex; gap: 8px; align-items: center; }
+.row-gap .dark-input { margin-bottom: 0; }
+.toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-soft); font-size: 0.88rem; }
+.info-box { background: var(--bg-card-2); padding: 10px; border-radius: 12px; font-size: 0.78rem; line-height: 1.65; color: var(--text-muted); }
+ 
