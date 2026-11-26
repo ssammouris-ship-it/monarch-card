@@ -2597,44 +2597,29 @@
     }
   })();
 })();
-function ensureOfflineStartWorks() {
-  const startBtn =
-    document.getElementById("btnStartGame") ||
-    document.getElementById("startGameBtn") ||
-    document.querySelector("[data-action='start-game']") ||
-    Array.from(document.querySelectorAll("button")).find((btn) =>
-      /ابدأ اللعب|start game|play/i.test(btn.textContent || "")
-    );
+function forceOfflineEnterApp() {
+  const btnStart = document.getElementById("btnStartGame");
+  const startScreen = document.getElementById("startScreen");
+  const appShell = document.getElementById("appShell");
 
-  if (!startBtn || startBtn.dataset.offlineGuardBound === "1") return;
-  startBtn.dataset.offlineGuardBound = "1";
+  if (!btnStart || btnStart.dataset.offlineBound === "1") return;
+  btnStart.dataset.offlineBound = "1";
 
-  startBtn.addEventListener(
-    "click",
-    () => {
-      if (!navigator.onLine) {
-        const startScreen =
-          document.getElementById("startScreen") ||
-          document.getElementById("homeScreen") ||
-          document.querySelector(".start-screen");
-        const gameScreen =
-          document.getElementById("gameScreen") ||
-          document.getElementById("mainScreen") ||
-          document.getElementById("appScreen");
-
-        if (startScreen) startScreen.classList.add("hidden");
-        if (gameScreen) {
-          gameScreen.classList.remove("hidden");
-          gameScreen.style.display = "block";
-        }
-      }
-    },
-    true
-  );
+  btnStart.addEventListener("click", () => {
+    if (startScreen) {
+      startScreen.classList.add("hidden");
+      startScreen.style.display = "none";
+    }
+    if (appShell) {
+      appShell.classList.remove("hidden");
+      appShell.style.display = "";
+    }
+  });
 }
 
-document.addEventListener("DOMContentLoaded", ensureOfflineStartWorks);
-window.addEventListener("load", ensureOfflineStartWorks);
-
-
-
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", forceOfflineEnterApp);
+} else {
+  forceOfflineEnterApp();
+}
+window.addEventListener("load", forceOfflineEnterApp);
