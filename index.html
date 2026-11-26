@@ -400,5 +400,13 @@
 </script>
 
   <script src="script.js"></script>
+  <script>
+  window.addEventListener("error", function (e) {
+    alert("خطأ: " + e.message + "\nالسطر: " + e.lineno);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    alert("خطأ Promise: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+</script>
 </body>
 </html>
