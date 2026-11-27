@@ -2765,6 +2765,201 @@
     }, 1200);
   } catch (_) {}
 })();
+/* === تحويل بطاقات المتجر المكررة (SP/UR/SSR) تلقائياً إلى بطاقات تحدي + تحديث الخانة الحمراء === */
+(function enableShopDuplicateToChallengeCard() {
+  try {
+    const LIMITS = { SP: 1, UR: 3, SSR: 10 };
+    const MSG = {
+      ar: { conv: "⚔️ تم تحويل المكرر إلى بطاقة تحدي", title: "⚔️ بطاقات التحدي", close: "إغلاق" },
+      en: { conv: "⚔️ Duplicate converted to Challenge Card", title: "⚔️ Challenge Cards", close: "Close" },
+      fr: { conv: "⚔️ Doublon converti en Carte de Défi", title: "⚔️ Cartes de Défi", close: "Fermer" },
+      ja: { conv: "⚔️ 重複カードをチャレンジカードに変換", title: "⚔️ チャレンジカード", close: "閉じる" }
+    };
+
+    function getLang() {
+      const l = (typeof state !== "undefined" && state?.lang) || localStorage.getItem("lang") || "ar";
+      return MSG[l] ? l : "ar";
+    }
+
+    function ensureChObj() {
+      if (typeof state === "undefined" || !state) return false;
+      if (!state.challengeCards || typeof state.challengeCards !== "object") {
+        state.challengeCards = { SP: 0, UR: 0, SSR: 0 };
+      }
+      state.challengeCards.SP = Math.max(0, Number(state.challengeCards.SP || 0));
+      state.challengeCards.UR = Math.max(0, Number(state.challengeCards.UR || 0));
+      state.challengeCards.SSR = Math.max(0, Number(state.challengeCards.SSR || 0));
+      return true;
+    }
+
+    function getInvKey() {
+      if (typeof state === "undefined" || !state) return null;
+      for (const k of ["inventory", "cards", "collection", "myCards", "ownedCards"]) {
+        if (Array.isArray(state[k])) return k;
+      }
+      return null;
+    }
+
+    function updateRedTicketPill() {
+      if (!ensureChObj()) return;
+      const total = state.challengeCards.SP + state.challengeCards.UR + state.challengeCards.SSR;
+
+      // تحديث العداد الموجود أصلاً في الخانة الحمراء بجانب الجواهر
+      const ticketEl =
+        document.getElementById("ticketsDisplay") ||
+        document.getElementById("hudTickets") ||
+        document.getElementById("challengeTicketsCount") ||
+        Array.from(document.querySelectorAll("header span, .top-bar span, .hud-pill span")).find((el) => {
+          const parentTxt = el.parentElement?.textContent || "";
+          return /🎟|🎫/.test(parentTxt) && /^\d+$/.test((el.textContent || "").trim());
+        });
+
+      if (ticketEl) {
+        ticketEl.textContent = String(total);
+      }
+
+      // ربط النقر على الخانة الحمراء بنافذة الـ 3 خانات (SP / UR / SSR)
+      const pill =
+        ticketEl?.closest("button, div, span") ||
+        Array.from(document.querySelectorAll("header button, header div, .top-bar button, .top-bar div")).find(
+          (el) => el.childElementCount <= 2 && /🎟|🎫/.test(el.textContent || "")
+        );
+
+      if (pill && !pill.dataset.chModalBound) {
+        pill.dataset.chModalBound = "1";
+        pill.style.cursor = "pointer";
+        pill.addEventListener("click", showChallengeTiersPopup);
+      }
+    }
+
+    function showChallengeTiersPopup() {
+      if (!ensureChObj()) return;
+      const old = document.getElementById("chTiersQuickModal");
+      if (old) old.remove();
+
+      const lang = getLang();
+      const box = document.createElement("div");
+      box.id = "chTiersQuickModal";
+      box.style.cssText =
+        "position:fixed;inset:0;z-index:9999;background:rgba(2,6,23,0.82);display:flex;align-items:center;justify-content:center;padding:16px;";
+      box.innerHTML = `
+        <div style="width:100%;max-width:340px;background:#0f172a;border:1px solid rgba(248,113,113,0.45);border-radius:16px;padding:16px;color:#fff;text-align:center;">
+          <h3 style="margin:0 0 12px;font-size:1rem;">${MSG[lang].title}</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+            <div style="padding:10px 6px;border-radius:10px;background:rgba(236,72,153,0.18);border:1px solid #ec4899;">
+              <div style="font-weight:900;color:#f472b6;">SP</div>
+              <div style="font-size:1.1rem;font-weight:800;margin-top:4px;">${state.challengeCards.SP}</div>
+              <div style="font-size:0.7rem;color:#cbd5e1;">💎 1000</div>
+            </div>
+            <div style="padding:10px 6px;border-radius:10px;background:rgba(239,68,68,0.18);border:1px solid #ef4444;">
+              <div style="font-weight:900;color:#f87171;">UR</div>
+              <div style="font-size:1.1rem;font-weight:800;margin-top:4px;">${state.challengeCards.UR}</div>
+              <div style="font-size:0.7rem;color:#cbd5e1;">💎 500</div>
+            </div>
+            <div style="padding:10px 6px;border-radius:10px;background:rgba(245,158,11,0.18);border:1px solid #f59e0b;">
+              <div style="font-weight:900;color:#fbbf24;">SSR</div>
+              <div style="font-size:1.1rem;font-weight:800;margin-top:4px;">${state.challengeCards.SSR}</div>
+              <div style="font-size:0.7rem;color:#cbd5e1;">💎 100</div>
+            </div>
+          </div>
+          <button id="btnCloseQuickCh" type="button" style="width:100%;padding:9px;border-radius:10px;border:none;background:#334155;color:#fff;font-weight:700;cursor:pointer;">
+            ${MSG[lang].close}
+          </button>
+        </div>
+      `;
+      document.body.appendChild(box);
+      box.querySelector("#btnCloseQuickCh").addEventListener("click", () => box.remove());
+      box.addEventListener("click", (e) => { if (e.target === box) box.remove(); });
+    }
+
+    let isConverting = false;
+    function convertOverflowDuplicates() {
+      if (isConverting || !ensureChObj()) return;
+      const invKey = getInvKey();
+      if (!invKey) return;
+      const list = state[invKey];
+      if (!Array.isArray(list) || !list.length) return;
+
+      isConverting = true;
+      try {
+        const grouped = new Map();
+        const gained = { SP: 0, UR: 0, SSR: 0 };
+
+        for (const card of list) {
+          if (!card || typeof card !== "object") continue;
+          const nameKey = String(card.name || card.id || "").trim().toLowerCase();
+          if (!nameKey) continue;
+
+          const cCount = Math.max(1, Number(card.copies || card.count || 1));
+          if (!grouped.has(nameKey)) {
+            grouped.set(nameKey, { ...card, copies: cCount, count: cCount });
+          } else {
+            const ex = grouped.get(nameKey);
+            const total = Math.max(1, Number(ex.copies || ex.count || 1)) + cCount;
+            ex.copies = total;
+            ex.count = total;
+          }
+        }
+
+        const finalCards = [];
+        for (const card of grouped.values()) {
+          const lim = LIMITS[card.rarity];
+          if (lim && card.copies > lim) {
+            const excess = card.copies - lim;
+            gained[card.rarity] += excess;
+            card.copies = lim;
+            card.count = lim;
+          }
+          finalCards.push(card);
+        }
+
+        const totalGained = gained.SP + gained.UR + gained.SSR;
+        if (totalGained > 0) {
+          state.challengeCards.SP += gained.SP;
+          state.challengeCards.UR += gained.UR;
+          state.challengeCards.SSR += gained.SSR;
+          state[invKey] = finalCards;
+
+          const parts = [];
+          if (gained.SP) parts.push(`+${gained.SP} SP`);
+          if (gained.UR) parts.push(`+${gained.UR} UR`);
+          if (gained.SSR) parts.push(`+${gained.SSR} SSR`);
+
+          if (typeof showToast === "function") {
+            showToast(`${MSG[getLang()].conv} (${parts.join(" | ")})`);
+          }
+          updateRedTicketPill();
+        }
+      } finally {
+        isConverting = false;
+      }
+    }
+
+    // اعتراض الحفظ وتحديث الواجهة لاكتشاف أي بطاقة مكررة فور سحبها من المتجر
+    if (typeof saveState === "function") {
+      const origSave = saveState;
+      saveState = function () {
+        convertOverflowDuplicates();
+        const res = origSave.apply(this, arguments);
+        updateRedTicketPill();
+        return res;
+      };
+    }
+
+    if (typeof updateHud === "function") {
+      const origHud = updateHud;
+      updateHud = function () {
+        const res = origHud.apply(this, arguments);
+        updateRedTicketPill();
+        return res;
+      };
+    }
+
+    convertOverflowDuplicates();
+    updateRedTicketPill();
+    setTimeout(updateRedTicketPill, 1200);
+  } catch (_) {}
+})();
 
                
 
