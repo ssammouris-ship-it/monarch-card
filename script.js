@@ -3432,27 +3432,160 @@ finalizeOnlineMatchRewards = async function (room) {
     if (!charName || typeof characterCatalog === "undefined") return;
 
     let matchedChar = null;
+    /* === إصلاح موضع صندوق الملاك + فرض التصنيف الصحيح بالشعبية داخل سجل النوادر === */
+(function applyOwnersAndRarityHardFix() {
+  const LIMITS = { SP: 1, UR: 3, SSR: 10 };
+  window.__unifiedOwners = {};
+
+  // قائمة VIP دقيقة بالاسم الكامل + التحقق من الأنمي لمنع تشابه الأسماء
+  const VIP_RULES = [
+    { names: ["monkey d. luffy", "luffy monkey"], rarity: "SP" },
+    { names: ["satoru gojo", "satoru gojou"], rarity: "SP" },
+    { names: ["son goku", "goku son"], rarity: "SP" },
+    { names: ["guts"], anime: "berserk", rarity: "SP" },
+    { names: ["sung jin-woo", "jin-u seong", "jinwoo sung"], rarity: "SP" },
+    { names: ["ryomen sukuna", "sukuna"], anime: "jujutsu", rarity: "SP" },
+    { names: ["sosuke aizen", "sousuke aizen"], rarity: "SP" },
+    { names: ["madara uchiha", "uchiha madara"], rarity: "SP" },
+    { names: ["levi", "levi ackerman"], anime: "titan", rarity: "SP" },
+    { names: ["lelouch lamperouge"], rarity: "SP" },
+    { names: ["shigeo kageyama"], rarity: "SP" },
+    { names: ["naruto uzumaki"], rarity: "UR" },
+    { names: ["sasuke uchiha", "itachi uchiha"], rarity: "UR" },
+    { names: ["roronoa zoro", "zoro roronoa"], rarity: "UR" },
+    { names: ["eren yeager", "eren jaeger"], rarity: "UR" },
+    { names: ["ichigo kurosaki"], rarity: "UR" },
+    { names: ["light yagami", "l lawliet", "ryuk"], rarity: "UR" },
+    { names: ["saitama", "kisuke urahara", "killua zoldyck", "hisoka morow", "vegeta"], rarity: "UR" },
+    { names: ["sebastian michaelis", "roy mustang", "edward elric", "ken kaneki"], rarity: "SSR" }
+  ];
+
+  function getTrueRarity(char) {
+    if (!char) return "N";
+    const name = (char.name || "").trim().toLowerCase();
+    const anime = (char.anime || char.media || char.series || "").toLowerCase();
+
+    for (const rule of VIP_RULES) {
+      if (rule.names.includes(name)) {
+        if (!rule.anime || anime.includes(rule.anime)) return rule.rarity;
+      }
+    }
+
+    const fav = Number(char.favourites ?? char.favorites ?? char.popularity ?? char.fav ?? 0);
+    if (fav >= 30000) return "SP";
+    if (fav >= 15000) return "UR";
+    if (fav >= 7000) return "SSR";
+    if (fav >= 3000) return "SR";
+    if (fav >= 1000) return "R";
+    if (fav >= 300) return "C";
+    return "N";
+  }
+
+  /* 1. فرض التصنيف الصحيح في الذاكرة وإخفاء البطاقات الخاطئة من شاشة النوادر فوراً */
+  function enforceTrueRarities() {
+    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
+
+    const byName = new Map();
+    characterCatalog.forEach((char) => {
+      char.rarity = getTrueRarity(char);
+      const key = (char.name || "").trim().toLowerCase();
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key).push(char);
+    });
+
+    // فحص البطاقات المعروضة حالياً في شاشة النوادر وإخفاء أي بطاقة لا تستحق الفلتر
+    const activeFilterBtn = document.querySelector("#codexFilters .active, .codex-filter.active, [data-codex-rarity].active");
+    const activeText = (activeFilterBtn?.textContent || "").toUpperCase();
+    const activeFilter = activeText.includes("SP") ? "SP" : activeText.includes("UR") ? "UR" : activeText.includes("SSR") ? "SSR" : "ALL";
+
+    document.querySelectorAll("#codexGrid > *, .codex-grid > *").forEach((cardEl) => {
+      const title = (cardEl.querySelector("h3, h4, .card-name, .codex-name")?.textContent || "").trim().toLowerCase();
+      const sub = (cardEl.querySelector("p, .card-anime, .codex-anime")?.textContent || "").trim().toLowerCase();
+      const list = byName.get(title);
+      if (!list || !list.length) return;
+
+      const matched = list.find((c) => !sub || (c.anime || "").toLowerCase().includes(sub.slice(0, 8))) || list[0];
+      const trueR = matched.rarity;
+
+      if (!LIMITS[trueR] || (activeFilter !== "ALL" && trueR !== activeFilter)) {
+        cardEl.style.display = "none";
+      } else {
+        cardEl.style.display = "";
+      }
+    });
+  }
+
+  /* 2. مزامنة الملاك الموحدة في Firebase */
+  async function syncCleanOwners() {
+    if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
+    const seen = new Set();
+    for (const card of state.inventory) {
+      const cid = String(card.charId || card.id || "");
+      if (!cid || !LIMITS[card.rarity] || seen.has(cid)) continue;
+      seen.add(cid);
+      try {
+        await db.ref(`rareOwners/${cid}/${state.uid}`).set({
+          uid: state.uid,
+          name: state.name || "Player",
+          rarity: card.rarity,
+          updatedAt: Date.now()
+        });
+      } catch (e) {}
+    }
+  }
+
+  if (db) {
+    db.ref("rareOwners").on("value", (snap) => {
+      window.__unifiedOwners = snap.val() || {};
+    });
+    setTimeout(syncCleanOwners, 2500);
+    setInterval(syncCleanOwners, 30000);
+  }
+
+  /* 3. وضع صندوق الملاك داخل البطاقة نفسها (وليس بجانبها) */
+  function patchOpenedModalOwners() {
+    const modal = document.querySelector(".modal:not(.hidden), #codexModal:not(.hidden), #dossierModal:not(.hidden)");
+    if (!modal) return;
+
+    // إزالة أي صندوق قديم خرج بالخطأ بجانب البطاقة
+    Array.from(modal.children).forEach((ch) => {
+      if (ch.id === "unifiedOwnersBox") ch.remove();
+    });
+
+    const innerCard = modal.firstElementChild;
+    if (!innerCard) return;
+
+    const titleEl = innerCard.querySelector("h2, h3, .modal-title, #dossierName");
+    const charName = (titleEl?.textContent || "").trim().toLowerCase();
+    if (!charName || typeof characterCatalog === "undefined") return;
+
+    let matchedChar = null;
     for (const c of characterCatalog.values()) {
       if ((c.name || "").trim().toLowerCase() === charName) {
         matchedChar = c;
         break;
       }
     }
-    if (!matchedChar || !LIMITS[matchedChar.rarity]) return;
+    if (!matchedChar) return;
+
+    const trueR = getTrueRarity(matchedChar);
+    const maxSlots = LIMITS[trueR];
+    let box = innerCard.querySelector("#unifiedOwnersBox");
+
+    if (!maxSlots) {
+      if (box) box.remove();
+      return;
+    }
 
     const cid = String(matchedChar.id);
-    const maxSlots = LIMITS[matchedChar.rarity];
-    const ownersObj = window.__unifiedOwners[cid] || {};
-    const ownersList = Object.values(ownersObj).slice(0, maxSlots);
+    const ownersList = Object.values(window.__unifiedOwners[cid] || {}).slice(0, maxSlots);
     const remaining = Math.max(0, maxSlots - ownersList.length);
 
-    let box = modal.querySelector("#unifiedOwnersBox");
     if (!box) {
       box = document.createElement("div");
       box.id = "unifiedOwnersBox";
-      box.style.cssText = "margin-top:12px; padding:10px; border-radius:12px; background:#0f172a; border:1px solid #334155;";
-      const content = modal.querySelector(".modal-content, .modal-body") || modal;
-      content.appendChild(box);
+      box.style.cssText = "width:100%; box-sizing:border-box; margin-top:12px; padding:10px; border-radius:12px; background:#0f172a; border:1px solid #334155;";
+      innerCard.appendChild(box);
     }
 
     const rowsHtml = ownersList.length
@@ -3474,8 +3607,11 @@ finalizeOnlineMatchRewards = async function (room) {
     `;
   }
 
+  enforceTrueRarities();
+  setInterval(enforceTrueRarities, 1200);
   setInterval(patchOpenedModalOwners, 600);
 })();
+
 
 })();
 function forceOfflineEnterApp() {
