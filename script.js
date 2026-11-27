@@ -2043,6 +2043,56 @@
   bindAllEvents();
   initFirebaseListeners();
   ensureRichCatalog();
+  /* === نظام التوسيع التلقائي للشخصيات + إصلاح زر تحميل المزيد في النوادر === */
+(function enableAutoCatalogExpansion() {
+  function getNextUnseenPage() {
+    const saved = Number(localStorage.getItem("monarch_anilist_cursor_v1")) || 1;
+    const bySize = Math.floor(characterCatalog.size / 45) + 1;
+    return Math.max(codexPageCursor, saved, bySize);
+  }
+
+  // ضبط المؤشر فوراً لما بعد الشخصيات المحمّلة حالياً
+  codexPageCursor = getNextUnseenPage();
+
+  async function loadNextBatch(showNotice = false) {
+    if (isFetchingAniList || !navigator.onLine) return 0;
+    isFetchingAniList = true;
+    let added = 0;
+    try {
+      const targetPage = getNextUnseenPage();
+      const before = characterCatalog.size;
+      await fetchAniListPage(targetPage);
+      codexPageCursor = targetPage + 1;
+      localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
+      added = characterCatalog.size - before;
+      updateHud();
+      if (added > 0) renderCodex();
+      if (showNotice) {
+        showToast(added > 0 ? `✅ تمت إضافة ${added} شخصية جديدة (المجموع: ${characterCatalog.size})` : "⏳ جاري تخطي المكرر... اضغط مجدداً");
+      }
+    } catch (_) {} finally {
+      isFetchingAniList = false;
+    }
+    return added;
+  }
+
+  // 1. التوسيع التلقائي في الخلفية (صفحة جديدة كل 20 ثانية أثناء اللعب بدون إرهاق السيرفر)
+  setTimeout(() => loadNextBatch(false), 5000);
+  setInterval(() => loadNextBatch(false), 20000);
+
+  // 2. ربط زر "تحميل المزيد من الأساطير" ليجلب الصفحة الجديدة فعلياً
+  document.addEventListener("click", async (e) => {
+    const btn = e.target?.closest?.("#btnCodexMoreLive");
+    if (!btn) return;
+    e.stopImmediatePropagation();
+    btn.disabled = true;
+    btn.textContent = t("codex_searching");
+    await loadNextBatch(true);
+    btn.disabled = false;
+    btn.textContent = t("codex_more");
+  }, true);
+})();
+
 })();
 
 function forceOfflineEnterApp() {
