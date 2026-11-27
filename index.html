@@ -180,13 +180,13 @@
 
             <!-- منتقي بطاقة الرهان المرئي الداكن -->
             <!-- رهان الذهب في النزال الآمن -->
-<div id="safeGoldStakeBox" class="stake-picker-panel" style="margin-bottom:10px;">
+            <div id="safeGoldStakeBox" class="stake-picker-panel" style="margin-bottom:10px; box-sizing:border-box;">
   <label class="field-label">🪙 رهان الذهب (اختياري - اكتب 0 للعب بدون رهان):</label>
-  <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
-    <input id="inputGoldStake" type="number" min="0" step="50" value="0" style="flex:1; padding:8px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#fff; font-weight:bold;" />
-    <button type="button" class="secondary-btn" onclick="document.getElementById('inputGoldStake').value=0">0</button>
-    <button type="button" class="secondary-btn" onclick="document.getElementById('inputGoldStake').value=200">200</button>
-    <button type="button" class="secondary-btn" onclick="document.getElementById('inputGoldStake').value=1000">1000</button>
+  <input id="inputGoldStake" type="number" min="0" step="50" value="0" style="width:100%; box-sizing:border-box; margin-top:6px; padding:10px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#fff; font-weight:bold; text-align:center;" />
+  <div style="display:flex; gap:6px; margin-top:6px;">
+    <button type="button" class="secondary-btn" style="flex:1; padding:8px 0;" onclick="document.getElementById('inputGoldStake').value=0">0</button>
+    <button type="button" class="secondary-btn" style="flex:1; padding:8px 0;" onclick="document.getElementById('inputGoldStake').value=200">200</button>
+    <button type="button" class="secondary-btn" style="flex:1; padding:8px 0;" onclick="document.getElementById('inputGoldStake').value=1000">1000</button>
   </div>
 </div>
 
