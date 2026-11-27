@@ -1,4 +1,4 @@
-const CACHE_NAME = "monarch-anime-cards-v29";
+const CACHE_NAME = "monarch-anime-cards-v30";
 const CORE_ASSETS = [
   "./",
   "./index.html",
