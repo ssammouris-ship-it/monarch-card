@@ -2668,62 +2668,23 @@ saveCharCache = function () {
 async function autoExpandCatalogOnStart(pagesToFetch = 3) {
   if (!navigator.onLine) return;
 
-  // حساب الصفحة التالية بعد اكتمال تحميل الـ 630 شخصية من الذاكرة
   const savedC = Number(localStorage.getItem(CURSOR_KEY)) || 1;
-  const minPage = Math.floor(characterCatalog.size / 50) + 1;
+  const minPage = Math.floor(characterCatalog.size / 45) + 1;
   codexPageCursor = Math.max(codexPageCursor, savedC, minPage);
 
-  const query = `query ($page: Int) {
-    Page(page: $page, perPage: 50) {
-      characters(sort: FAVOURITES_DESC) {
-        id
-        name { full native }
-        image { large }
-        favourites
-        description
-        media(perPage: 1, sort: POPULARITY_DESC) {
-          nodes { title { romaji english } genres }
-        }
-      }
-    }
-  }`;
-
-  let addedPages = 0;
+  let fetched = 0;
   let attempts = 0;
 
-  while (addedPages < pagesToFetch && attempts < 6) {
+  while (fetched < pagesToFetch && attempts < 6) {
     if (!navigator.onLine) break;
     attempts++;
     try {
-      const beforeSize = characterCatalog.size;
-      const res = await fetch(ANILIST_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ query, variables: { page: codexPageCursor } })
-      });
-      if (!res.ok) break;
-      const json = await res.json();
-      const list = json?.data?.Page?.characters || [];
-      if (!list.length) break;
-
-      list.forEach((ch) => {
-        const media = ch.media?.nodes?.[0];
-        registerCharacter({
-          id: ch.id,
-          name: ch.name?.full,
-          nativeName: ch.name?.native,
-          anime: media?.title?.english || media?.title?.romaji || "Anime Legend",
-          genres: media?.genres || [],
-          favorites: ch.favourites || 0,
-          image: ch.image?.large,
-          bioEn: cleanDescription(ch.description)
-        }, false);
-      });
-
+      const added = await fetchAniListPage(codexPageCursor);
       codexPageCursor++;
-      saveCharCache();
-      if (characterCatalog.size > beforeSize) {
-        addedPages++;
+      localStorage.setItem(CURSOR_KEY, String(codexPageCursor));
+      if (added > 0) {
+        fetched++;
+        if (typeof updateHud === "function") updateHud();
         if (typeof renderCodex === "function") renderCodex();
       }
       await new Promise((r) => setTimeout(r, 1200));
