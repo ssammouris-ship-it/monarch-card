@@ -2578,7 +2578,7 @@
     stopQuickMatchSearch(false);
     origLeave(removeFromDb);
   };
-})();,
+})();
 
 })();
 
