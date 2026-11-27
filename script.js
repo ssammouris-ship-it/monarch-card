@@ -2579,6 +2579,40 @@
     origLeave(removeFromDb);
   };
 })();
+/* === منع تكرار نفس البطاقة كبطاقتين متجاورتين في شاشة بطاقاتي === */
+(function preventDuplicateCardsInInventory() {
+  try {
+    if (typeof renderInventory !== "function") return;
+    const origRenderInv = renderInventory;
+    renderInventory = function () {
+      try {
+        if (Array.isArray(state?.cards)) {
+          const seen = new Map();
+          const deduped = [];
+          for (const card of state.cards) {
+            if (!card) continue;
+            const key = String(card.id ?? card.name ?? "").trim().toLowerCase();
+            if (!key) {
+              deduped.push(card);
+              continue;
+            }
+            if (!seen.has(key)) {
+              seen.set(key, deduped.length);
+              deduped.push(card);
+            } else {
+              const firstIdx = seen.get(key);
+              const existing = deduped[firstIdx];
+              existing.copies = Number(existing.copies || existing.count || 1) + Number(card.copies || card.count || 1);
+              existing.count = existing.copies;
+            }
+          }
+          state.cards = deduped;
+        }
+      } catch (_) {}
+      return origRenderInv.apply(this, arguments);
+    };
+  } catch (_) {}
+})();
 
 })();
 
