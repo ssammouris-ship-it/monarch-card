@@ -2613,6 +2613,82 @@
     };
   } catch (_) {}
 })();
+/* === إصلاح تكرار البطاقات وتوحيد الندرة في شاشة بطاقاتي === */
+(function fixInventoryDuplicatesAndRarity() {
+  try {
+    if (typeof renderInventory !== "function") return;
+    const origRenderInv = renderInventory;
+
+    renderInventory = function () {
+      try {
+        if (typeof state !== "undefined" && Array.isArray(state.cards)) {
+          const merged = new Map();
+
+          for (const rawCard of state.cards) {
+            if (!rawCard || typeof rawCard !== "object") continue;
+
+            const catalogItem =
+              typeof characterCatalog !== "undefined" && characterCatalog
+                ? characterCatalog.get(rawCard.id) ||
+                  Array.from(characterCatalog.values()).find(
+                    (c) =>
+                      c &&
+                      String(c.name || "").trim().toLowerCase() ===
+                        String(rawCard.name || "").trim().toLowerCase()
+                  )
+                : null;
+
+            const unifiedRarity =
+              catalogItem?.rarity || rawCard.rarity || "C";
+
+            const key = String(
+              catalogItem?.id ?? rawCard.id ?? rawCard.name ?? ""
+            )
+              .trim()
+              .toLowerCase();
+
+            const incomingCopies = Math.max(
+              1,
+              Number(rawCard.copies || rawCard.count || 1)
+            );
+
+            if (!key) {
+              rawCard.rarity = unifiedRarity;
+              merged.set(Symbol(), rawCard);
+              continue;
+            }
+
+            if (!merged.has(key)) {
+              merged.set(key, {
+                ...rawCard,
+                id: catalogItem?.id ?? rawCard.id,
+                name: catalogItem?.name || rawCard.name,
+                anime: catalogItem?.anime || rawCard.anime,
+                image: catalogItem?.image || rawCard.image,
+                rarity: unifiedRarity,
+                copies: incomingCopies,
+                count: incomingCopies
+              });
+            } else {
+              const existing = merged.get(key);
+              const totalCopies =
+                Math.max(1, Number(existing.copies || existing.count || 1)) +
+                incomingCopies;
+              existing.rarity = unifiedRarity;
+              existing.copies = totalCopies;
+              existing.count = totalCopies;
+            }
+          }
+
+          state.cards = Array.from(merged.values());
+          if (typeof saveState === "function") saveState();
+        }
+      } catch (_) {}
+
+      return origRenderInv.apply(this, arguments);
+    };
+  } catch (_) {}
+})();
 
 })();
 
