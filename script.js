@@ -517,23 +517,30 @@
   }
 
   async function ensureRichCatalog() {
-    if (isFetchingAniList || !navigator.onLine) return;
-    isFetchingAniList = true;
-    try {
-      // صفحات متوازنة: 1-2 للأساطير SP/UR/SSR، 12 لـ SR/R، و 50 و 100 لـ C/N
-      const pages = characterCatalog.size < 80 ? [1, 2, 12, 50, 100] : [codexPageCursor++];
-      for (const p of pages) {
-        await fetchAniListPage(p);
-      }
-      initStartScreenBackground();
-      updateHud();
-      renderCodex();
-    } catch (err) {
-      console.warn("AniList fetch skipped:", err);
-    } finally {
-      isFetchingAniList = false;
+  if (isFetchingAniList || !navigator.onLine) return;
+  isFetchingAniList = true;
+  try {
+    const savedC = Number(localStorage.getItem("monarch_anilist_cursor_v1")) || 1;
+    const nextP = Math.max(codexPageCursor, savedC, Math.floor(characterCatalog.size / 45) + 1);
+    const pages = characterCatalog.size < 80 ? [1, 2, 12] : [nextP, nextP + 1, nextP + 2];
+
+    for (const p of pages) {
+      await fetchAniListPage(p);
+      codexPageCursor = Math.max(codexPageCursor, p + 1);
+      localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
     }
+
+    saveCharCache();
+    initStartScreenBackground();
+    updateHud();
+    renderCodex();
+  } catch (err) {
+    console.warn("AniList fetch skipped:", err);
+  } finally {
+    isFetchingAniList = false;
   }
+}
+
 
   /* =========================================================
      7. الترجمة التلقائية + نظام تلميحات الأسلحة والقدرات اللانهائي
