@@ -2960,8 +2960,8 @@
     setTimeout(updateRedTicketPill, 1200);
   } catch (_) {}
 })();
-/* === نظام شراء الحزم بالجملة (يدعم الحزم العادية بسرعة فائقة + الحزم الخرافية المضمونة بدون تداخل) === */
-(function enableBulkPackOpeningV2() {
+/* === شراء بالجملة للحزم العادية + مؤثرات كشف سينمائية احترافية للحزم الخرافية المضمونة + تسريع الأداء (4 لغات) === */
+(function enableRegularBulkAndEpicMythicReveal() {
   try {
     const RARITY_ORDER = { SP: 7, UR: 6, SSR: 5, SR: 4, R: 3, C: 2, N: 1 };
     const RARITY_COLORS = {
@@ -2974,6 +2974,401 @@
       N: "#94a3b8"
     };
 
+    // 1) تنسيقات الأداء السريع + مؤثرات الكشف السينمائية الاحترافية للحزم الخرافية (GPU Accelerated)
+    if (!document.getElementById("monarchEpicRevealCss")) {
+      const style = document.createElement("style");
+      style.id = "monarchEpicRevealCss";
+      style.textContent = `
+        .inv-card, .card-item, .dex-card, .shop-item, .pack-card {
+          contain: layout style;
+        }
+        body.bulk-silent-mode .modal:not(#bulkResultsModal):not(#bulkPackModal),
+        body.bulk-silent-mode [id*="packModal"],
+        body.bulk-silent-mode [id*="PackModal"],
+        body.bulk-silent-mode [id*="revealModal"],
+        body.bulk-silent-mode [id*="rewardModal"] {
+          display: none !important;
+          animation: none !important;
+          transition: none !important;
+        }
+
+        /* === مؤثرات الحزم الخرافية === */
+        .mythic-fx-overlay {
+          overflow: hidden !important;
+          perspective: 1100px;
+          --fx-main: #f59e0b;
+          --fx-sec: #fde047;
+          --fx-glow: rgba(245, 158, 11, 0.55);
+        }
+        .mythic-fx-overlay.fx-tier-UR {
+          --fx-main: #ef4444;
+          --fx-sec: #fb923c;
+          --fx-glow: rgba(239, 68, 68, 0.62);
+        }
+        .mythic-fx-overlay.fx-tier-SP {
+          --fx-main: #ec4899;
+          --fx-sec: #a855f7;
+          --fx-glow: rgba(236, 72, 153, 0.68);
+        }
+
+        .mythic-fx-flash {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 2;
+          background: radial-gradient(circle, #ffffff 0%, var(--fx-sec) 28%, var(--fx-main) 60%, transparent 80%);
+          animation: mythicFlashBurst 0.65s ease-out forwards;
+        }
+
+        .mythic-fx-rays {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          width: 150vmax;
+          height: 150vmax;
+          margin-left: -75vmax;
+          margin-top: -75vmax;
+          pointer-events: none;
+          z-index: 0;
+          opacity: 0.42;
+          background: repeating-conic-gradient(
+            from 0deg,
+            var(--fx-glow) 0deg 10deg,
+            transparent 10deg 26deg
+          );
+          -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 36%, transparent 65%);
+          mask-image: radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 36%, transparent 65%);
+          animation: mythicRaysSpin 14s linear infinite;
+        }
+
+        .mythic-fx-ring {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          width: 120px;
+          height: 120px;
+          margin-left: -60px;
+          margin-top: -60px;
+          border-radius: 50%;
+          border: 3px solid var(--fx-sec);
+          box-shadow: 0 0 28px var(--fx-main), inset 0 0 20px var(--fx-main);
+          pointer-events: none;
+          z-index: 1;
+          animation: mythicShockwave 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .mythic-fx-sparks {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 3;
+          overflow: hidden;
+        }
+        .mythic-fx-spark {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: var(--sz, 7px);
+          height: var(--sz, 7px);
+          border-radius: 50%;
+          background: radial-gradient(circle, #fff 15%, var(--fx-sec) 65%, var(--fx-main) 100%);
+          box-shadow: 0 0 10px var(--fx-main);
+          animation: mythicSparkFly var(--dur, 1.1s) cubic-bezier(0.12, 0.8, 0.25, 1) var(--del, 0s) forwards;
+        }
+
+        .mythic-fx-card {
+          position: relative !important;
+          z-index: 4 !important;
+          border-color: var(--fx-main) !important;
+          box-shadow: 0 0 38px var(--fx-glow), 0 18px 50px rgba(0, 0, 0, 0.75) !important;
+          animation: mythicCardEntrance 0.75s cubic-bezier(0.22, 1.18, 0.36, 1) forwards,
+                     mythicCardPulse 2.4s ease-in-out 0.75s infinite !important;
+          transform-style: preserve-3d;
+        }
+
+        .mythic-img-wrap {
+          position: relative;
+          overflow: hidden;
+          border-radius: 14px;
+          display: block;
+          box-shadow: 0 0 22px var(--fx-glow);
+        }
+        .mythic-img-wrap::after {
+          content: "";
+          position: absolute;
+          top: -20%;
+          left: -85%;
+          width: 55%;
+          height: 140%;
+          transform: skewX(-24deg);
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.12) 35%,
+            rgba(255, 255, 255, 0.65) 50%,
+            rgba(255, 255, 255, 0.12) 65%,
+            transparent 100%
+          );
+          pointer-events: none;
+          animation: mythicFoilSweep 2.6s ease-in-out 0.45s infinite;
+        }
+
+        @keyframes mythicFlashBurst {
+          0% { opacity: 0.95; transform: scale(0.4); }
+          40% { opacity: 0.75; transform: scale(1.15); }
+          100% { opacity: 0; transform: scale(1.5); }
+        }
+        @keyframes mythicRaysSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes mythicShockwave {
+          0% { transform: scale(0.3); opacity: 0.95; }
+          100% { transform: scale(5.2); opacity: 0; }
+        }
+        @keyframes mythicCardEntrance {
+          0% { opacity: 0; transform: scale(0.35) rotateY(160deg) translateY(35px); }
+          65% { opacity: 1; transform: scale(1.05) rotateY(-8deg) translateY(-4px); }
+          100% { opacity: 1; transform: scale(1) rotateY(0deg) translateY(0); }
+        }
+        @keyframes mythicCardPulse {
+          0%, 100% { box-shadow: 0 0 32px var(--fx-glow), 0 18px 46px rgba(0, 0, 0, 0.72); }
+          50% { box-shadow: 0 0 54px var(--fx-glow), 0 0 18px var(--fx-sec), 0 18px 46px rgba(0, 0, 0, 0.72); }
+        }
+        @keyframes mythicFoilSweep {
+          0% { left: -85%; }
+          55%, 100% { left: 155%; }
+        }
+        @keyframes mythicSparkFly {
+          0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+          75% { opacity: 0.95; }
+          100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // 2) مؤثر صوتي سينمائي فوري (Web Audio) بدون تحميل أي ملفات خارجية
+    function playEpicRevealSound(tier) {
+      try {
+        if (typeof state !== "undefined" && (state?.muted || state?.sfxMuted)) return;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const notes =
+          tier === "SP"
+            ? [523.25, 659.25, 783.99, 1046.5, 1318.51]
+            : tier === "UR"
+            ? [440, 554.37, 659.25, 880]
+            : [392, 493.88, 587.33, 783.99];
+
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = tier === "SP" ? "triangle" : "sine";
+          osc.frequency.setValueAtTime(freq, now + i * 0.075);
+
+          gain.gain.setValueAtTime(0.001, now + i * 0.075);
+          gain.gain.exponentialRampToValueAtTime(0.14, now + i * 0.075 + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + i * 0.075 + 0.45);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.075);
+          osc.stop(now + i * 0.075 + 0.48);
+        });
+
+        setTimeout(() => {
+          try { ctx.close(); } catch (_) {}
+        }, 1200);
+      } catch (_) {}
+    }
+
+    // 3) تزيين شاشة الكشف الأصلية للحزم الخرافية فور ظهورها
+    const PROTECTED_IDS = new Set([
+      "appShell",
+      "startScreen",
+      "bulkPackModal",
+      "bulkResultsModal",
+      "settingsModal",
+      "challengeCardsModal",
+      "chTiersQuickModal",
+      "incomingChPopup"
+    ]);
+
+    function enhanceMythicRevealElement(overlay, fallbackTier) {
+      if (!overlay || overlay.dataset.epicFxApplied === "1") return false;
+      overlay.dataset.epicFxApplied = "1";
+
+      const txt = overlay.textContent || "";
+      const tierMatch = txt.match(/\b(SP|UR|SSR)\b/);
+      const tier = tierMatch ? tierMatch[1] : fallbackTier || "SP";
+
+      overlay.classList.add("mythic-fx-overlay", `fx-tier-${tier}`);
+
+      // إزالة أي بقايا مؤثرات قديمة داخل نفس العنصر
+      overlay.querySelectorAll(".mythic-fx-flash, .mythic-fx-rays, .mythic-fx-ring, .mythic-fx-sparks").forEach((n) => n.remove());
+
+      const flash = document.createElement("div");
+      flash.className = "mythic-fx-flash";
+      const rays = document.createElement("div");
+      rays.className = "mythic-fx-rays";
+      const ring = document.createElement("div");
+      ring.className = "mythic-fx-ring";
+
+      const sparks = document.createElement("div");
+      sparks.className = "mythic-fx-sparks";
+      for (let i = 0; i < 20; i++) {
+        const sp = document.createElement("span");
+        sp.className = "mythic-fx-spark";
+        const angle = (Math.PI * 2 * i) / 20 + (Math.random() * 0.25 - 0.12);
+        const dist = 110 + Math.random() * 145;
+        const tx = Math.cos(angle) * dist;
+        const ty = Math.sin(angle) * dist;
+        sp.style.setProperty("--tx", tx.toFixed(0) + "px");
+        sp.style.setProperty("--ty", ty.toFixed(0) + "px");
+        sp.style.setProperty("--sz", (5 + Math.random() * 6).toFixed(0) + "px");
+        sp.style.setProperty("--dur", (0.75 + Math.random() * 0.55).toFixed(2) + "s");
+        sp.style.setProperty("--del", (Math.random() * 0.12).toFixed(2) + "s");
+        sparks.appendChild(sp);
+      }
+
+      overlay.insertBefore(rays, overlay.firstChild);
+      overlay.insertBefore(ring, overlay.firstChild);
+      overlay.appendChild(sparks);
+      overlay.appendChild(flash);
+
+      // تطبيق حركة الدخول والهالة على صندوق البطاقة الداخلي
+      const cardBox =
+        Array.from(overlay.children).find(
+          (el) =>
+            !el.classList.contains("mythic-fx-flash") &&
+            !el.classList.contains("mythic-fx-rays") &&
+            !el.classList.contains("mythic-fx-ring") &&
+            !el.classList.contains("mythic-fx-sparks")
+        ) || overlay.firstElementChild;
+
+      if (cardBox) {
+        cardBox.classList.add("mythic-fx-card");
+        const img = cardBox.querySelector("img");
+        if (img && img.parentElement && !img.parentElement.classList.contains("mythic-img-wrap")) {
+          const wrap = document.createElement("div");
+          wrap.className = "mythic-img-wrap";
+          img.parentElement.insertBefore(wrap, img);
+          wrap.appendChild(img);
+        }
+      }
+
+      playEpicRevealSound(tier);
+
+      // تنظيف العلامة عند إغلاق النافذة لتعمل المؤثرات في الفتحة التالية أيضاً
+      const claimBtn = overlay.querySelector("button");
+      if (claimBtn && !claimBtn.dataset.epicResetBound) {
+        claimBtn.dataset.epicResetBound = "1";
+        claimBtn.addEventListener("click", () => {
+          setTimeout(() => {
+            overlay.dataset.epicFxApplied = "";
+            overlay.classList.remove("mythic-fx-overlay", "fx-tier-SP", "fx-tier-UR", "fx-tier-SSR");
+            if (cardBox) cardBox.classList.remove("mythic-fx-card");
+            overlay.querySelectorAll(".mythic-fx-flash, .mythic-fx-rays, .mythic-fx-ring, .mythic-fx-sparks").forEach((n) => n.remove());
+          }, 120);
+        });
+      }
+      return true;
+    }
+
+    let activeRevealObs = null;
+    let activeRevealTimer = null;
+
+    function armMythicRevealFX(expectedTier) {
+      if (activeRevealObs) {
+        activeRevealObs.disconnect();
+        activeRevealObs = null;
+      }
+      if (activeRevealTimer) {
+        clearTimeout(activeRevealTimer);
+        activeRevealTimer = null;
+      }
+
+      const scanAndEnhance = () => {
+        const nodes = document.querySelectorAll("body > div, .modal, [id*='Modal'], [id*='modal'], [id*='reveal'], [id*='Reward']");
+        for (let i = 0; i < nodes.length; i++) {
+          const el = nodes[i];
+          if (!el || PROTECTED_IDS.has(el.id) || el.classList.contains("hidden")) continue;
+          const cs = window.getComputedStyle(el);
+          if (cs.display === "none" || cs.visibility === "hidden" || cs.position !== "fixed") continue;
+          const hasImg = !!el.querySelector("img");
+          const hasBtn = !!el.querySelector("button");
+          if (hasImg && hasBtn) {
+            if (enhanceMythicRevealElement(el, expectedTier)) {
+              if (activeRevealObs) {
+                activeRevealObs.disconnect();
+                activeRevealObs = null;
+              }
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+
+      if (scanAndEnhance()) return;
+
+      activeRevealObs = new MutationObserver(() => {
+        scanAndEnhance();
+      });
+      activeRevealObs.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style"]
+      });
+
+      // إيقاف المراقب تلقائياً بعد 5 ثوانٍ لضمان عدم وجود أي عبء على الأداء
+      activeRevealTimer = setTimeout(() => {
+        if (activeRevealObs) {
+          activeRevealObs.disconnect();
+          activeRevealObs = null;
+        }
+      }, 5000);
+    }
+
+    // 4) تخفيف عمليات الحفظ المتلاحقة لتسريع اللعبة كلها
+    if (typeof saveState === "function" && !window.__monarchSaveOptimized) {
+      window.__monarchSaveOptimized = true;
+      const rawSaveState = saveState;
+      let saveTimer = null;
+      let pendingSave = false;
+
+      window.__flushSaveStateNow = function () {
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        pendingSave = false;
+        rawSaveState();
+      };
+
+      saveState = function () {
+        pendingSave = true;
+        if (saveTimer) return;
+        saveTimer = setTimeout(() => {
+          saveTimer = null;
+          if (pendingSave) {
+            pendingSave = false;
+            rawSaveState();
+          }
+        }, 120);
+      };
+
+      window.addEventListener("pagehide", () => {
+        if (pendingSave) window.__flushSaveStateNow();
+      });
+    }
+
+    // 5) الشراء بالجملة للحزم العادية فقط (مع 4 لغات)
     const B_I18N = {
       ar: {
         title: "🛒 شراء حزم بالجملة",
@@ -2981,10 +3376,8 @@
         total: "التكلفة الإجمالية:",
         buy: "شراء وفتح الكل ⚡",
         cancel: "إلغاء",
-        opening: "⏳ جاري فتح الحزم...",
         results: "🎉 نتائج فتح الحزم",
         ch_gained: "⚔️ بطاقات تحدي مكتسبة:",
-        gold_gained: "🪙 ذهب إضافي:",
         no_funds: "⚠️ رصيدك غير كافٍ لشراء هذا العدد!",
         close: "ممتاز ✓"
       },
@@ -2994,10 +3387,8 @@
         total: "Total Cost:",
         buy: "Buy & Open All ⚡",
         cancel: "Cancel",
-        opening: "⏳ Opening packs...",
         results: "🎉 Pack Opening Results",
         ch_gained: "⚔️ Challenge Cards Gained:",
-        gold_gained: "🪙 Bonus Gold:",
         no_funds: "⚠️ Not enough balance for this quantity!",
         close: "Awesome ✓"
       },
@@ -3007,10 +3398,8 @@
         total: "Coût Total :",
         buy: "Acheter & Ouvrir ⚡",
         cancel: "Annuler",
-        opening: "⏳ Ouverture en cours...",
         results: "🎉 Résultats d'ouverture",
         ch_gained: "⚔️ Cartes de défi gagnées :",
-        gold_gained: "🪙 Or bonus :",
         no_funds: "⚠️ Solde insuffisant pour cette quantité !",
         close: "Super ✓"
       },
@@ -3020,10 +3409,8 @@
         total: "合計コスト:",
         buy: "購入して一括開封 ⚡",
         cancel: "キャンセル",
-        opening: "⏳ パックを開封中...",
         results: "🎉 開封結果",
         ch_gained: "⚔️ 獲得チャレンジカード:",
-        gold_gained: "🪙 ボーナスゴールド:",
         no_funds: "⚠️ 残高が不足しています！",
         close: "OK ✓"
       }
@@ -3054,86 +3441,25 @@
       return null;
     }
 
-    function snapshotInventory() {
-      const key = getInvKey();
-      const map = new Map();
-      if (key && Array.isArray(state[key])) {
-        for (let i = 0; i < state[key].length; i++) {
-          const c = state[key][i];
-          if (!c) continue;
-          const id = String(c.name || c.id || "").trim().toLowerCase();
-          const count = Math.max(1, Number(c.copies || c.count || 1));
-          map.set(id, (map.get(id) || 0) + count);
-        }
-      }
-      return map;
-    }
-
     function parsePriceFromText(txt) {
       const cleaned = String(txt || "").replace(/[\s,\u00A0\u202F.]/g, "");
       const m = cleaned.match(/(\d+)/);
       return m ? Number(m[1]) : 0;
     }
 
-    const PROTECTED_IDS = new Set([
-      "appShell",
-      "startScreen",
-      "bulkPackModal",
-      "bulkResultsModal",
-      "bulkProgressModal",
-      "settingsModal",
-      "challengeCardsModal",
-      "chTiersQuickModal",
-      "incomingChPopup"
-    ]);
-
-    // التقاط وإغلاق نافذة الفتح الفردية الأصلية (مثل نافذة "رائع! استلام") واستخراج بيانات البطاقة منها
-    function captureAndCloseNativePopup(capturedArr) {
-      let closedAny = false;
-      const candidates = document.querySelectorAll("body > div, .modal, [id*='Modal'], [id*='modal'], [id*='reveal'], [id*='Reward']");
-      for (let i = 0; i < candidates.length; i++) {
-        const el = candidates[i];
-        if (!el || PROTECTED_IDS.has(el.id)) continue;
-        if (el.classList.contains("hidden")) continue;
-
-        const cs = window.getComputedStyle(el);
-        if (cs.display === "none" || cs.visibility === "hidden") continue;
-        if (cs.position !== "fixed") continue;
-
-        const claimBtn = Array.from(el.querySelectorAll("button")).find((b) =>
-          /استلام|رائع|claim|collect|awesome|réclamer|受け取る|إغلاق|close|ok/i.test(b.textContent || "")
-        );
-        const imgEl = el.querySelector("img");
-
-        if (claimBtn && (imgEl || /SP|UR|SSR|SR|ذهب|gold/i.test(el.textContent || ""))) {
-          if (Array.isArray(capturedArr) && imgEl) {
-            const nameEl =
-              el.querySelector("h2, h3, h4, .card-name, .reveal-name") ||
-              Array.from(el.querySelectorAll("div, p, span")).find((n) => {
-                const s = (n.textContent || "").trim();
-                return (
-                  n.children.length === 0 &&
-                  s.length >= 2 &&
-                  s.length <= 45 &&
-                  !/SP|UR|SSR|SR|#|ذهب|استلام|رائع|\+|🪙|💎/i.test(s)
-                );
-              });
-            const rarityMatch = (el.textContent || "").match(/\b(SP|UR|SSR|SR|R|C|N)\b/);
-            capturedArr.push({
-              name: nameEl ? nameEl.textContent.trim() : "Card",
-              image: imgEl.getAttribute("src") || "",
-              rarity: rarityMatch ? rarityMatch[1] : "SP"
-            });
-          }
-
-          claimBtn.click();
-          if (document.body.contains(el) && window.getComputedStyle(el).display !== "none") {
-            el.classList.add("hidden");
-          }
-          closedAny = true;
+    function snapshotInventory() {
+      const key = getInvKey();
+      const map = new Map();
+      if (key && Array.isArray(state[key])) {
+        const arr = state[key];
+        for (let i = 0; i < arr.length; i++) {
+          const c = arr[i];
+          if (!c) continue;
+          const id = String(c.name || c.id || "").trim().toLowerCase();
+          map.set(id, (map.get(id) || 0) + Math.max(1, Number(c.copies || c.count || 1)));
         }
       }
-      return closedAny;
+      return map;
     }
 
     let isBulkRunning = false;
@@ -3143,7 +3469,7 @@
       function (e) {
         if (isBulkRunning) return;
         const btn = e.target?.closest("button");
-        if (!btn || btn.closest("#bulkPackModal, #bulkResultsModal, #bulkProgressModal")) return;
+        if (!btn || btn.closest("#bulkPackModal, #bulkResultsModal")) return;
 
         const cardEl = btn.closest(".shop-item, .pack-card, .shop-card, [class*='pack'], [class*='shop']");
         if (!cardEl) return;
@@ -3156,29 +3482,40 @@
         const isGold = /🪙|ذهب|gold/i.test(txt) || btn.className.includes("gold");
         if (!isGold && !isGem) return;
 
-        e.preventDefault();
-        e.stopPropagation();
-
         const currency = isGem ? "gems" : "gold";
+        const cardText = cardEl.textContent || "";
+
+        // الحزم الخرافية المضمونة: نتركها تعمل بطبيعتها بدون نافذة جملة، ونفعّل مؤثرات الكشف السينمائية فقط
         const isMythicPack =
           (currency === "gems" && unitPrice >= 500) ||
-          /مضمون|الكونية|الخرافية|الأسطورية|guaranteed|cosmic|mythic/i.test(cardEl.textContent || "");
+          /مضمون|guaranteed|الكونية|cosmic/i.test(cardText);
+
+        if (isMythicPack) {
+          let tier = "SP";
+          if (/\bSSR\b/i.test(cardText)) tier = "SSR";
+          else if (/\bUR\b/i.test(cardText)) tier = "UR";
+          armMythicRevealFX(tier);
+          return;
+        }
+
+        // الحزم العادية: نفتح نافذة اختيار العدد السريعة
+        e.preventDefault();
+        e.stopPropagation();
 
         const packTitle =
           cardEl.querySelector("h3, h4, .pack-name, .pack-title")?.textContent?.trim() || bt("title");
 
-        openBulkSelectorModal(btn, packTitle, unitPrice, currency, isMythicPack);
+        openBulkSelectorModal(btn, packTitle, unitPrice, currency);
       },
       true
     );
 
-    function openBulkSelectorModal(targetBtn, packTitle, unitPrice, currency, isMythicPack) {
+    function openBulkSelectorModal(targetBtn, packTitle, unitPrice, currency) {
       const old = document.getElementById("bulkPackModal");
       if (old) old.remove();
 
-      let qty = isMythicPack ? 3 : 5;
-      const maxQty = isMythicPack ? 20 : 50;
-      const presets = isMythicPack ? [1, 3, 5, 10, 20] : [1, 5, 10, 25, 50];
+      let qty = 5;
+      const maxQty = 50;
       const icon = currency === "gems" ? "💎" : "🪙";
 
       const modal = document.createElement("div");
@@ -3203,7 +3540,7 @@
             </div>
 
             <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px;">
-              ${presets
+              ${[1, 5, 10, 25, 50]
                 .map(
                   (n) => `<button type="button" data-q="${n}" style="padding:7px 4px;border-radius:8px;border:1px solid ${
                     qty === n ? "#f59e0b" : "#334155"
@@ -3253,11 +3590,7 @@
             return;
           }
           modal.remove();
-          if (isMythicPack) {
-            executeAsyncMythicBulk(targetBtn, qty, unitPrice);
-          } else {
-            executeSyncFastBulk(targetBtn, qty);
-          }
+          executeInstantRegularBulk(targetBtn, qty);
         });
       }
 
@@ -3265,10 +3598,8 @@
       renderModal();
     }
 
-    // 1) الحزم العادية: سريعة جداً دفعة واحدة
-    function executeSyncFastBulk(targetBtn, count) {
+    function executeInstantRegularBulk(targetBtn, count) {
       const beforeInv = snapshotInventory();
-      const beforeGold = Number(state?.gold || 0);
       const beforeCh = {
         SP: Number(state?.challengeCards?.SP || 0),
         UR: Number(state?.challengeCards?.UR || 0),
@@ -3288,12 +3619,11 @@
       if (origToast) showToast = noop;
       if (origSfx) playSfx = noop;
 
-      const captured = [];
+      document.body.classList.add("bulk-silent-mode");
       isBulkRunning = true;
       try {
         for (let i = 0; i < count; i++) {
           targetBtn.click();
-          captureAndCloseNativePopup(captured);
         }
       } finally {
         isBulkRunning = false;
@@ -3304,137 +3634,45 @@
         if (origSfx) playSfx = origSfx;
       }
 
-      if (origSave) origSave();
-      if (origHud) origHud();
-      if (origSfx) origSfx("win");
-      setTimeout(() => captureAndCloseNativePopup(null), 60);
-
-      finalizeBulkResults(beforeInv, beforeGold, beforeCh, captured, count);
-    }
-
-    // 2) الحزم الخرافية المضمونة: تفتح بالتتابع السريع مع إغلاق فوري للنافذة الفردية وجمع كل البطاقات
-    async function executeAsyncMythicBulk(targetBtn, count, unitPrice) {
-      const beforeInv = snapshotInventory();
-      const beforeGold = Number(state?.gold || 0);
-      const beforeCh = {
-        SP: Number(state?.challengeCards?.SP || 0),
-        UR: Number(state?.challengeCards?.UR || 0),
-        SSR: Number(state?.challengeCards?.SSR || 0)
-      };
-
-      const prog = document.createElement("div");
-      prog.id = "bulkProgressModal";
-      prog.style.cssText =
-        "position:fixed;inset:0;z-index:10005;background:rgba(2,6,23,0.9);display:flex;align-items:center;justify-content:center;padding:16px;";
-      prog.innerHTML = `
-        <div style="background:#0f172a;border:1px solid #38bdf8;border-radius:16px;padding:20px 26px;color:#fff;text-align:center;">
-          <div style="font-size:1rem;font-weight:800;margin-bottom:6px;">${bt("opening")}</div>
-          <div id="bulkProgCount" style="font-size:1.1rem;font-weight:900;color:#fbbf24;direction:ltr;">0 / ${count}</div>
-        </div>
-      `;
-      document.body.appendChild(prog);
-
-      const captured = [];
-      let stepPopupSeen = false;
-
-      const observer = new MutationObserver(() => {
-        if (captureAndCloseNativePopup(captured)) {
-          stepPopupSeen = true;
+      document.querySelectorAll(".modal, [id*='packModal'], [id*='PackModal'], [id*='revealModal']").forEach((m) => {
+        if (m.id !== "bulkResultsModal" && m.id !== "bulkPackModal") {
+          m.classList.add("hidden");
         }
       });
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+      document.body.classList.remove("bulk-silent-mode");
 
-      const origSfx = typeof playSfx === "function" ? playSfx : null;
-      const origToast = typeof showToast === "function" ? showToast : null;
-      if (origSfx) playSfx = () => {};
-      if (origToast) showToast = () => {};
+      if (typeof window.__flushSaveStateNow === "function") window.__flushSaveStateNow();
+      else if (origSave) origSave();
 
-      isBulkRunning = true;
-      let opened = 0;
-      try {
-        for (let i = 0; i < count; i++) {
-          if (Number(state?.gems || 0) < unitPrice) break;
-          const cntEl = document.getElementById("bulkProgCount");
-          if (cntEl) cntEl.textContent = `${i + 1} / ${count}`;
-
-          stepPopupSeen = false;
-          const prevGems = Number(state?.gems || 0);
-          targetBtn.disabled = false;
-          targetBtn.click();
-          opened++;
-
-          // انتظار انتهاء الحزمة الحالية (بحد أقصى 1.8 ثانية)
-          const startTs = Date.now();
-          while (Date.now() - startTs < 1800) {
-            if (captureAndCloseNativePopup(captured)) {
-              stepPopupSeen = true;
-            }
-            if (stepPopupSeen) break;
-            if (Number(state?.gems || 0) !== prevGems && Date.now() - startTs > 220) {
-              captureAndCloseNativePopup(captured);
-              break;
-            }
-            await new Promise((r) => setTimeout(r, 45));
-          }
-          await new Promise((r) => setTimeout(r, 40));
-        }
-      } finally {
-        isBulkRunning = false;
-        observer.disconnect();
-        if (origSfx) playSfx = origSfx;
-        if (origToast) showToast = origToast;
-        prog.remove();
-      }
-
-      captureAndCloseNativePopup(captured);
-      if (typeof saveState === "function") saveState();
-      if (typeof updateHud === "function") updateHud();
+      if (origHud) origHud();
       if (origSfx) origSfx("win");
 
-      finalizeBulkResults(beforeInv, beforeGold, beforeCh, captured, opened || count);
-    }
-
-    function finalizeBulkResults(beforeInv, beforeGold, beforeCh, captured, totalPacks) {
       const key = getInvKey();
-      const pulledMap = new Map();
-
+      const pulledList = [];
       if (key && Array.isArray(state[key])) {
-        for (let i = 0; i < state[key].length; i++) {
-          const c = state[key][i];
+        const arr = state[key];
+        for (let i = 0; i < arr.length; i++) {
+          const c = arr[i];
           if (!c) continue;
           const id = String(c.name || c.id || "").trim().toLowerCase();
           const nowCount = Math.max(1, Number(c.copies || c.count || 1));
           const prevCount = beforeInv.get(id) || 0;
           if (nowCount > prevCount) {
-            pulledMap.set(id, { card: c, gained: nowCount - prevCount });
+            pulledList.push({ card: c, gained: nowCount - prevCount });
           }
         }
       }
 
-      // إضافة البطاقات التي التُقطت من النوافذ الفردية (خاصة التي تحولت فوراً إلى بطاقات تحدي)
-      if (Array.isArray(captured) && captured.length) {
-        for (let i = 0; i < captured.length; i++) {
-          const cap = captured[i];
-          const id = String(cap.name || "").trim().toLowerCase();
-          if (!id) continue;
-          if (!pulledMap.has(id)) {
-            pulledMap.set(id, { card: cap, gained: 1 });
-          }
-        }
-      }
-
-      const pulledList = Array.from(pulledMap.values());
-      const goldGained = Math.max(0, Number(state?.gold || 0) - beforeGold);
       const chGained = {
         SP: Math.max(0, Number(state?.challengeCards?.SP || 0) - beforeCh.SP),
         UR: Math.max(0, Number(state?.challengeCards?.UR || 0) - beforeCh.UR),
         SSR: Math.max(0, Number(state?.challengeCards?.SSR || 0) - beforeCh.SSR)
       };
 
-      showBulkResultsModal(pulledList, chGained, goldGained, totalPacks);
+      showBulkResultsModal(pulledList, chGained, count);
     }
 
-    function showBulkResultsModal(pulledList, chGained, goldGained, totalPacks) {
+    function showBulkResultsModal(pulledList, chGained, totalPacks) {
       const old = document.getElementById("bulkResultsModal");
       if (old) old.remove();
 
@@ -3459,14 +3697,6 @@
           </div>
 
           ${
-            goldGained > 0
-              ? `<div style="padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.16);border:1px solid rgba(251,191,36,0.45);font-size:0.8rem;color:#fde047;margin-bottom:8px;text-align:center;">
-                  ${bt("gold_gained")} <b style="direction:ltr;display:inline-block;">+${fmtNum(goldGained)} 🪙</b>
-                </div>`
-              : ""
-          }
-
-          ${
             totalCh > 0
               ? `<div style="padding:7px 10px;border-radius:10px;background:rgba(239,68,68,0.18);border:1px solid rgba(248,113,113,0.45);font-size:0.8rem;color:#fca5a5;margin-bottom:10px;text-align:center;">
                   ${bt("ch_gained")} <b>${chParts.join(" | ")}</b>
@@ -3479,7 +3709,7 @@
               .map(({ card, gained }) => {
                 const col = RARITY_COLORS[card.rarity] || "#94a3b8";
                 return `
-                  <div style="position:relative;border-radius:10px;overflow:hidden;border:1.5px solid ${col};background:#1e293b;">
+                  <div style="position:relative;border-radius:10px;overflow:hidden;border:1.5px solid ${col};background:#1e293b;contain:layout style;">
                     <span style="position:absolute;top:4px;right:4px;padding:2px 5px;border-radius:6px;background:${col};color:#fff;font-size:0.65rem;font-weight:900;">${card.rarity || "N"}</span>
                     ${
                       gained > 1
