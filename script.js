@@ -2579,43 +2579,70 @@
     origLeave(removeFromDb);
   };
 })();
-/* === ترقية تحدي الشعبية: شخصيتان تتكرران + جواهر + مضاعفة 2 / 4 / 8 / 16 === */
-(function upgradePopularityLoopAndMultipliers() {
-  const MULTIPLIERS = [2, 4, 8, 16];
-  let lockedPair = [];
+/* === مضاعفة حقيقية 2 / 4 / 8 / 16 / 32 مع تكرار نفس الشخصيتين وتنسيق واضح === */
+(function applyTrueLadder2to32() {
+  const LADDER = [2, 4, 8, 16, 32];
 
-  function pickTwoRecurringCharacters() {
+  const st = document.createElement("style");
+  st.id = "monarchLadder32Css";
+  st.textContent = `
+    .pop-decision-box {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+      align-items: stretch !important;
+    }
+    .btn-cashout, .btn-double {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 3px !important;
+      line-height: 1.25 !important;
+      white-space: normal !important;
+      word-break: break-word !important;
+      text-align: center !important;
+      min-height: 56px !important;
+    }
+    .pop-reward-line {
+      direction: ltr;
+      unicode-bidi: isolate;
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+  `;
+  document.head.appendChild(st);
+
+  let fixedPair = [];
+
+  function getPairForLoop() {
     const pool = Array.from(characterCatalog.values()).filter(
       (c) => Number(c.favorites || c.favourites || 0) > 0 && c.image
     );
     if (pool.length < 2) return [];
-
     const sorted = [...pool].sort(
       (a, b) => Number(b.favorites || b.favourites || 0) - Number(a.favorites || a.favourites || 0)
     );
-    const topHalf = sorted.slice(0, Math.min(80, sorted.length));
-
-    for (let i = 0; i < 40; i++) {
-      const first = topHalf[Math.floor(Math.random() * topHalf.length)];
-      const second = topHalf[Math.floor(Math.random() * topHalf.length)];
-      if (!first || !second || first.id === second.id) continue;
-      const favA = Number(first.favorites || first.favourites || 0);
-      const favB = Number(second.favorites || second.favourites || 0);
-      if (favA !== favB) {
-        return Math.random() < 0.5 ? [first, second] : [second, first];
+    const slice = sorted.slice(0, Math.min(120, sorted.length));
+    for (let i = 0; i < 45; i++) {
+      const a = slice[Math.floor(Math.random() * slice.length)];
+      const b = slice[Math.floor(Math.random() * slice.length)];
+      if (a && b && a.id !== b.id && Number(a.favorites || 0) !== Number(b.favorites || 0)) {
+        return Math.random() < 0.5 ? [a, b] : [b, a];
       }
     }
-    return [topHalf[0], topHalf[topHalf.length - 1]];
+    return [slice[0], slice[1]];
   }
 
-  function getMultForRound(roundNum) {
-    const idx = Math.max(0, Math.min(MULTIPLIERS.length - 1, (roundNum || 1) - 1));
-    return MULTIPLIERS[idx];
+  function getLadderMult(roundIdx) {
+    const i = Math.max(0, (roundIdx || 1) - 1);
+    if (i < LADDER.length) return LADDER[i];
+    return LADDER[LADDER.length - 1] * Math.pow(2, i - (LADDER.length - 1));
   }
 
-  function getGemPotForRound(roundNum) {
-    const mult = getMultForRound(roundNum);
-    return mult * 2; // 4 -> 8 -> 16 -> 32 جوهرة
+  function getGemsForMult(mult) {
+    // 2 -> 4 -> 8 -> 16 -> 32 جوهرة بالتوازي مع المضاعف
+    return Math.max(2, mult);
   }
 
   renderPopularityGame = function () {
@@ -2625,10 +2652,10 @@
 
     if (popBetState.phase === "bet") {
       stopPopTimer();
-      lockedPair = [];
+      fixedPair = [];
       box.innerHTML = `
         <div class="pop-bet-panel" style="grid-column:1/-1;">
-          <p class="muted-text">${t("pop_pick_bet")} • ${t("pop_pot")}: 🪙 + 💎 (×2 / ×4 / ×8 / ×16)</p>
+          <p class="muted-text">${t("pop_pick_bet")} • ${t("pop_pot")}: 🪙 + 💎 (2 / 4 / 8 / 16 / 32)</p>
           <div class="pop-bets-row">
             <button class="pop-bet-btn" data-bet="50"><span>50 🪙</span><small>${t("pop_low")}</small></button>
             <button class="pop-bet-btn" data-bet="150"><span>150 🪙</span><small>${t("pop_mid")}</small></button>
@@ -2642,21 +2669,23 @@
           if (state.gold < bet) return showToast(t("msg_no_gold"));
           if (characterCatalog.size < 10) await ensureRichCatalog();
 
-          lockedPair = pickTwoRecurringCharacters();
-          if (lockedPair.length < 2) return showToast("⏳ جاري تحميل الشخصيات...");
+          fixedPair = getPairForLoop();
+          if (fixedPair.length < 2) return showToast("⏳ جاري تحميل الشخصيات...");
 
           state.gold -= bet;
           saveState();
           updateHud();
 
-          const startMult = MULTIPLIERS[0]; // ×2
+          const startMult = getLadderMult(1); // 2
           popBetState = {
             phase: "playing",
             baseBet: bet,
+            multIndex: 1,
+            multiplier: startMult,
             pot: bet * startMult,
-            gemPot: getGemPotForRound(1),
+            gemPot: getGemsForMult(startMult),
             round: 1,
-            pair: [...lockedPair]
+            pair: [...fixedPair]
           };
 
           playSfx("click");
@@ -2667,23 +2696,29 @@
       return;
     }
 
-    // إبقاء نفس الشخصيتين تتكرران في كل جولة مع عكس ترتيبهما أحياناً لإضفاء تشويق
-    if (lockedPair.length === 2) {
+    if (fixedPair.length === 2) {
       popBetState.pair =
-        popBetState.round % 2 === 0 ? [lockedPair[1], lockedPair[0]] : [lockedPair[0], lockedPair[1]];
+        popBetState.round % 2 === 0 ? [fixedPair[1], fixedPair[0]] : [fixedPair[0], fixedPair[1]];
     }
 
-    const currentMult = getMultForRound(popBetState.round);
-    const nextMult = getMultForRound(popBetState.round + 1);
-    const currentGems = popBetState.gemPot || getGemPotForRound(popBetState.round);
-    const nextGems = getGemPotForRound(popBetState.round + 1);
+    const curRound = popBetState.multIndex || popBetState.round || 1;
+    const curMult = getLadderMult(curRound);
+    const nextMult = getLadderMult(curRound + 1);
+    const curPot = popBetState.baseBet * curMult;
+    const nextPot = popBetState.baseBet * nextMult;
+    const curGems = getGemsForMult(curMult);
+    const nextGems = getGemsForMult(nextMult);
+
+    popBetState.multiplier = curMult;
+    popBetState.pot = curPot;
+    popBetState.gemPot = curGems;
 
     const hud = document.createElement("div");
     hud.className = "pop-hud-bar";
     hud.style.gridColumn = "1 / -1";
     hud.innerHTML = `
-      <span>${t("pop_round")}: <b>#${popBetState.round} (×${currentMult})</b></span>
-      <span>${t("pop_pot")}: <b style="color:var(--gold);">${popBetState.pot} 🪙 + ${currentGems} 💎</b></span>
+      <span>${t("pop_round")}: <b>#${popBetState.round} (×${curMult})</b></span>
+      <span>${t("pop_pot")}: <b class="pop-reward-line" style="color:var(--gold);">${curPot} 🪙 + ${curGems} 💎</b></span>
     `;
     box.appendChild(hud);
 
@@ -2729,7 +2764,7 @@
             renderPopularityGame();
             setTimeout(() => {
               popBetState.phase = "bet";
-              lockedPair = [];
+              fixedPair = [];
               renderPopularityGame();
             }, 1600);
           }
@@ -2742,29 +2777,36 @@
       const dec = document.createElement("div");
       dec.className = "pop-decision-box";
       dec.style.gridColumn = "1 / -1";
-      const nextPot = popBetState.baseBet * nextMult;
 
       dec.innerHTML = `
-        <button id="btnPopCashout" class="btn-cashout">${t("pop_cashout")} (+${popBetState.pot} 🪙 +${currentGems} 💎)</button>
-        <button id="btnPopDouble" class="btn-double">🔥 ×${nextMult} (${nextPot} 🪙 +${nextGems} 💎)</button>
+        <button id="btnPopCashout" class="btn-cashout">
+          <span>💰 ${t("pop_cashout")}</span>
+          <span class="pop-reward-line">+${curPot} 🪙 + ${curGems} 💎</span>
+        </button>
+        <button id="btnPopDouble" class="btn-double">
+          <span>🔥 ×${nextMult}</span>
+          <span class="pop-reward-line">${nextPot} 🪙 + ${nextGems} 💎</span>
+        </button>
       `;
       box.appendChild(dec);
 
       document.getElementById("btnPopCashout").addEventListener("click", () => {
-        state.gold += popBetState.pot;
-        state.gems += currentGems;
+        state.gold += curPot;
+        state.gems += curGems;
         saveState();
         updateHud();
         playSfx("win");
-        showToast(`${t("pop_cashed")} +${popBetState.pot} 🪙 | +${currentGems} 💎`);
+        showToast(`${t("pop_cashed")} +${curPot} 🪙 | +${curGems} 💎`);
         popBetState.phase = "bet";
-        lockedPair = [];
+        fixedPair = [];
         renderPopularityGame();
       });
 
       document.getElementById("btnPopDouble").addEventListener("click", () => {
         popBetState.round += 1;
-        popBetState.pot = popBetState.baseBet * nextMult;
+        popBetState.multIndex = curRound + 1;
+        popBetState.multiplier = nextMult;
+        popBetState.pot = nextPot;
         popBetState.gemPot = nextGems;
         popBetState.phase = "playing";
         playSfx("click");
@@ -2774,6 +2816,7 @@
     }
   };
 })();
+
 
 })();
 
