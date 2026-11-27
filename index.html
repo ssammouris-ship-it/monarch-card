@@ -399,15 +399,30 @@
     };
   }
 </script>
-
-  <script src="script.js"></script>
   <script>
-  window.addEventListener("error", function (e) {
-    alert("خطأ: " + e.message + "\nالسطر: " + e.lineno);
-  });
-  window.addEventListener("unhandledrejection", function (e) {
-    alert("خطأ Promise: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
-  });
+  if (typeof firebase === "undefined") {
+    const fakeRef = {
+      on: function () {},
+      off: function () {},
+      once: function () { return Promise.resolve({ val: function () { return null; }, forEach: function () {} }); },
+      set: function () { return Promise.resolve(); },
+      update: function () { return Promise.resolve(); },
+      remove: function () { return Promise.resolve(); },
+      push: function () { return fakeRef; },
+      orderByChild: function () { return fakeRef; },
+      limitToLast: function () { return fakeRef; },
+      limitToFirst: function () { return fakeRef; },
+      child: function () { return fakeRef; }
+    };
+    window.firebase = {
+      apps: [{}],
+      initializeApp: function () { return {}; },
+      database: function () { return { ref: function () { return fakeRef; } }; },
+      analytics: function () { return {}; }
+    };
+  }
 </script>
+<script src="script.js"></script>
 </body>
 </html>
+
