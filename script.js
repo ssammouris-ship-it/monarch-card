@@ -2623,3 +2623,87 @@ if (document.readyState === "loading") {
   forceOfflineEnterApp();
 }
 window.addEventListener("load", forceOfflineEnterApp);
+
+/* === حفظ جميع الشخصيات + التحديث التلقائي عند الدخول === */
+const CURSOR_KEY = "monarch_anilist_cursor_v1";
+const savedCursor = Number(localStorage.getItem(CURSOR_KEY));
+if (savedCursor > codexPageCursor) codexPageCursor = savedCursor;
+
+// 1. إعادة تعريف دالة الحفظ لتخزين كل الشخصيات بدون حد 360
+saveCharCache = function () {
+  try {
+    const arr = Array.from(characterCatalog.values());
+    localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(arr));
+    localStorage.setItem(CURSOR_KEY, String(codexPageCursor));
+  } catch (_) {
+    // في حال امتلاء ذاكرة المتصفح، يتم ضغط الوصف فقط لحفظ أكبر عدد ممكن
+    try {
+      const compact = Array.from(characterCatalog.values()).map((c) => ({
+        ...c,
+        bioEn: c.bioEn ? c.bioEn.slice(0, 140) : ""
+      }));
+      localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(compact));
+      localStorage.setItem(CURSOR_KEY, String(codexPageCursor));
+    } catch (__) {}
+  }
+  const el = document.getElementById("settingsCatalogCount");
+  if (el) el.textContent = characterCatalog.size;
+};
+
+// 2. جلب وتحديث الشخصيات تلقائياً في الخلفية عند الدخول (بالإنترنت فقط)
+async function autoExpandCatalogOnStart(pagesToFetch = 3) {
+  if (!navigator.onLine) return;
+  const query = `query ($page: Int) {
+    Page(page: $page, perPage: 50) {
+      characters(sort: FAVOURITES_DESC) {
+        id
+        name { full native }
+        image { large }
+        favourites
+        description
+        media(perPage: 1, sort: POPULARITY_DESC) {
+          nodes { title { romaji english } genres }
+        }
+      }
+    }
+  }`;
+
+  for (let i = 0; i < pagesToFetch; i++) {
+    if (!navigator.onLine) break;
+    try {
+      const res = await fetch(ANILIST_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ query, variables: { page: codexPageCursor } })
+      });
+      if (!res.ok) break;
+      const json = await res.json();
+      const list = json?.data?.Page?.characters || [];
+      if (!list.length) break;
+
+      list.forEach((ch) => {
+        const media = ch.media?.nodes?.[0];
+        registerCharacter({
+          id: ch.id,
+          name: ch.name?.full,
+          nativeName: ch.name?.native,
+          anime: media?.title?.english || media?.title?.romaji || "Anime Legend",
+          genres: media?.genres || [],
+          favorites: ch.favourites || 0,
+          image: ch.image?.large,
+          bioEn: cleanDescription(ch.description)
+        }, false);
+      });
+
+      codexPageCursor++;
+      saveCharCache();
+      await new Promise((r) => setTimeout(r, 900));
+    } catch (_) {
+      break;
+    }
+  }
+}
+
+window.addEventListener("load", () => {
+  setTimeout(() => autoExpandCatalogOnStart(3), 2500);
+});
