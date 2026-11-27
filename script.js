@@ -2322,6 +2322,85 @@
     btn.textContent = t("codex_more");
   }, true);
 })();
+/* === التحقق الصارم بالاسم الكامل + الأنمي + القصة (bioEn) لمنع أي خطأ === */
+(function restoreTrueLegendsStrict() {
+  const EXTRA_LEGENDS = [
+    // SP (القمة المطلقة — الاسم + الأنمي + القصة)
+    { names: ["gokuu son", "son goku", "goku son"], anime: "dragon ball", story: /saiyan|kamehameha|earth|martial/i, rarity: "SP" },
+    { names: ["beerus"], anime: "dragon ball", story: /god of destruction|universe 7|whis/i, rarity: "SP" },
+    { names: ["whis"], anime: "dragon ball", story: /angel|beerus|universe 7|grand minister/i, rarity: "SP" },
+    { names: ["zeno", "zen-oh"], anime: "dragon ball", story: /omni-king|universe|multiverse|god/i, rarity: "SP" },
+    { names: ["goku black", "gokuu black"], anime: "dragon ball", story: /zamasu|saiyan|zero mortals|time ring/i, rarity: "SP" },
+    { names: ["broly", "jiren"], anime: "dragon ball", story: /saiyan|pride troopers|universe|power/i, rarity: "SP" },
+    { names: ["hashirama senju", "kaguya otsutsuki", "kaguya ootsutsuki", "isshiki otsutsuki"], anime: "naruto", story: /hokage|chakra|otsutsuki|shinobi|konoha/i, rarity: "SP" },
+    { names: ["yhwach", "genryuusai shigekuni yamamoto"], anime: "bleach", story: /quincy|soul society|gotei|zanpakuto|captain/i, rarity: "SP" },
+    { names: ["shanks", "kaido", "kaidou", "gol d. roger", "roger gol d."], anime: "one piece", story: /pirate|yonko|emperor|haki|sea/i, rarity: "SP" },
+    { names: ["alucard"], anime: "hellsing", story: /vampire|hellsing|integra|undead/i, rarity: "SP" },
+    { names: ["reinhard van astrea"], anime: "re:zero", story: /sword saint|knight|astrea/i, rarity: "SP" },
+    { names: ["simon"], anime: "gurren lagann", story: /drill|spiral|kamina|gunmen|lagann/i, rarity: "SP" },
+    { names: ["mori jin", "jin mori"], anime: "god of high school", story: /taekwondo|monkey king|tournament/i, rarity: "SP" },
+
+    // UR (النخبة والأقوياء — الاسم + الأنمي + القصة)
+    { names: ["frieza", "freeza", "cell", "majin buu"], anime: "dragon ball", story: /emperor|saiyan|android|destroy|planet/i, rarity: "UR" },
+    { names: ["dracule mihawk", "mihawk dracule", "trafalgar law", "law trafalgar", "donquixote doflamingo", "portgas d. ace", "sabo", "monkey d. garp"], anime: "one piece", story: /pirate|marine|warlord|swordsman|devil fruit|revolutionary/i, rarity: "UR" },
+    { names: ["pain", "nagato", "obito uchiha", "jiraiya"], anime: "naruto", story: /akatsuki|rinnegan|sharingan|sannin|shinobi|konoha/i, rarity: "UR" },
+    { names: ["byakuya kuchiki", "ulquiorra cifer", "toushirou hitsugaya", "toshiro hitsugaya"], anime: "bleach", story: /captain|espada|hollow|shinigami|soul/i, rarity: "UR" },
+    { names: ["toji fushiguro", "suguru geto", "suguru getou", "yuuta okkotsu", "yuta okkotsu"], anime: "jujutsu", story: /curse|sorcerer|zenin|jujutsu/i, rarity: "UR" },
+    { names: ["zeno zoldyck", "silva zoldyck", "illumi zoldyck"], anime: "hunter", story: /zoldyck|assassin|killua|nen/i, rarity: "UR" },
+    { names: ["muzan kibutsuji", "kokushibo", "akaza", "kyoujurou rengoku", "kyojuro rengoku"], anime: "demon slayer", story: /demon|hashira|upper moon|slayer|breathing/i, rarity: "UR" },
+    { names: ["garou", "tatsumaki"], anime: "one punch", story: /hero|monster|psychic|martial/i, rarity: "UR" },
+    { names: ["escanor", "meliodas", "ban"], anime: "seven deadly sins", story: /sin|sin of|britannia|holy knight|demon/i, rarity: "UR" },
+    { names: ["all might", "toshinori yagi"], anime: "hero academia", story: /hero|quirk|one for all|symbol of peace/i, rarity: "UR" },
+    { names: ["griffith"], anime: "berserk", story: /band of the hawk|guts|god hand|eclipse/i, rarity: "UR" },
+    { names: ["thorfinn"], anime: "vinland", story: /viking|askeladd|warrior|thors/i, rarity: "UR" },
+    { names: ["erwin smith"], anime: "titan", story: /survey corps|commander|titan/i, rarity: "UR" },
+    { names: ["saber", "artoria pendragon", "archer", "emiya"], anime: "fate", story: /servant|holy grail|excalibur|master/i, rarity: "UR" },
+    { names: ["frieren"], anime: "frieren", story: /elf|mage|demon king|himmel/i, rarity: "UR" },
+    { names: ["makima", "denji"], anime: "chainsaw man", story: /devil|chainsaw|public safety|hunter/i, rarity: "UR" },
+    { names: ["esdeath", "akame"], anime: "akame ga kill", story: /empire|night raid|imperial arms|teigu|assassin/i, rarity: "UR" },
+    { names: ["yami sukehiro", "asta"], anime: "black clover", story: /magic|clover|black bull|grimoire/i, rarity: "UR" },
+    { names: ["yuujirou hanma", "yujiro hanma", "baki hanma"], anime: "baki", story: /strongest|fighter|hanma|martial/i, rarity: "UR" },
+    { names: ["musashi miyamoto"], anime: "vagabond", story: /sword|samurai|ronin|takezo/i, rarity: "UR" },
+    { names: ["alucard"], anime: "castlevania", story: /dracula|dhampir|vampire|belmont/i, rarity: "UR" },
+    { names: ["chuuya nakahara"], anime: "bungo", story: /port mafia|gravity|ability|dazai/i, rarity: "UR" }
+  ];
+
+  const STRICT_COMBAT_LORE = /\b(fight|battle|warrior|sword|demon|curse|magic|power|assassin|hunter|ninja|pirate|shinigami|sorcerer|saiyan|titan|alchemist|stand|quirk|strongest|army|vampire|mecha|martial|monster|knight|hero|villain)\b/i;
+
+  function applyExtraLegends() {
+    if (typeof characterCatalog === "undefined") return;
+    characterCatalog.forEach((ch) => {
+      const name = String(ch.name || "").trim().toLowerCase();
+      const anime = String(ch.anime || "").trim().toLowerCase();
+      const story = String(ch.bioEn || "").toLowerCase();
+      const favs = Number(ch.favorites || ch.favourites || 0);
+
+      for (const rule of EXTRA_LEGENDS) {
+        if (rule.names.includes(name)) {
+          const animeOk = !rule.anime || anime.includes(rule.anime);
+          const storyOk = !rule.story || rule.story.test(story) || story.length < 30;
+          if (animeOk && storyOk) {
+            ch.rarity = rule.rarity;
+            return;
+          }
+        }
+      }
+
+      // توسيع تلقائي آمن: يشترط عدم وجود الأنمي في القائمة المستبعدة + وجود طابع قتالي في القصة
+      if (ch.rarity === "SP" || ch.rarity === "UR") return;
+      const isBlocked = typeof NON_COMBAT_ANIME_RE !== "undefined" && NON_COMBAT_ANIME_RE.test(anime);
+      if (isBlocked || !STRICT_COMBAT_LORE.test(story)) return;
+
+      if (favs >= 18000) ch.rarity = "SP";
+      else if (favs >= 9000) ch.rarity = "UR";
+      else if (favs >= 3500) ch.rarity = "SSR";
+    });
+    if (typeof renderCodex === "function") renderCodex();
+  }
+
+  applyExtraLegends();
+  setTimeout(applyExtraLegends, 2000);
+})();
 
 })();
 
