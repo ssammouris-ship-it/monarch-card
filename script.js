@@ -2579,92 +2579,19 @@
     origLeave(removeFromDb);
   };
 })();
-/* === نظام حدود السيرفر + بطاقات التحدي (SP/UR/SSR) + اختصار الأرقام (K/M/B/T) + 4 لغات === */
-(function applyServerLimitsChallengeAndCompactHud() {
+/* === إصلاح نهائي: ربط زر التحدي الأحمر الموجود + منع التكرار في أي مصفوفة مخزون + رفع الندرة بدون تخفيض === */
+(function fixAllInventoryRarityAndRedPill() {
   try {
+    const RARITY_RANK = { N: 1, C: 2, R: 3, SR: 4, SSR: 5, UR: 6, SP: 7 };
     const SERVER_LIMITS = { SP: 1, UR: 3, SSR: 10 };
-    const REFUSE_PENALTY = { SP: 1000, UR: 500, SSR: 100 };
 
-    const CH_I18N = {
-      ar: {
-        title: "⚔️ بطاقات التحدي",
-        owned: "العدد المتاح:",
-        use_btn: "تحدي المالك",
-        no_cards: "لا تملك بطاقات تحدي من هذا المستوى حالياً.",
-        no_targets: "لا يوجد ملاك آخرون متاحون للتحدي حالياً.",
-        converted: "⚔️ اكتمل حد السيرفر! حصلت على بطاقة تحدي",
-        sent: "⚔️ تم إرسال التحدي إلى المالك بنجاح!",
-        incoming_title: "⚔️ تحدي بطاقة نادرة!",
-        incoming_desc: "تحداك لاعب على بطاقتك. اقبل النزال أو ادفع الغرامة:",
-        accept: "قبول النزال ⚔️",
-        refuse_pay: "رفض ودفع",
-        paid_ok: "💎 تم دفع الغرامة وحماية بطاقتك.",
-        lost_card: "⚠️ لا تملك جواهر كافية! خسرت البطاقة وعادت للمتجر.",
-        need_online: "⚠️ يلزم اتصال بالإنترنت لإرسال التحدي.",
-        close: "إغلاق"
-      },
-      en: {
-        title: "⚔️ Challenge Cards",
-        owned: "Available:",
-        use_btn: "Challenge Owner",
-        no_cards: "You have no challenge cards of this tier.",
-        no_targets: "No other owners available to challenge right now.",
-        converted: "⚔️ Server limit reached! You got a Challenge Card:",
-        sent: "⚔️ Challenge sent to the owner!",
-        incoming_title: "⚔️ Rare Card Challenge!",
-        incoming_desc: "A player challenged you for your card. Accept or pay penalty:",
-        accept: "Accept Duel ⚔️",
-        refuse_pay: "Refuse & Pay",
-        paid_ok: "💎 Penalty paid. Your card is safe.",
-        lost_card: "⚠️ Not enough gems! Card lost and returned to shop.",
-        need_online: "⚠️ Internet connection required for challenges.",
-        close: "Close"
-      },
-      fr: {
-        title: "⚔️ Cartes de Défi",
-        owned: "Disponibles :",
-        use_btn: "Défier le propriétaire",
-        no_cards: "Aucune carte de défi de ce niveau.",
-        no_targets: "Aucun autre propriétaire disponible.",
-        converted: "⚔️ Limite serveur atteinte ! Carte de défi obtenue :",
-        sent: "⚔️ Défi envoyé au propriétaire !",
-        incoming_title: "⚔️ Défi de Carte Rare !",
-        incoming_desc: "Un joueur vous défie pour votre carte. Acceptez ou payez :",
-        accept: "Accepter le duel ⚔️",
-        refuse_pay: "Refuser & Payer",
-        paid_ok: "💎 Pénalité payée. Carte protégée.",
-        lost_card: "⚠️ Pas assez de gemmes ! Carte retournée en boutique.",
-        need_online: "⚠️ Connexion Internet requise.",
-        close: "Fermer"
-      },
-      ja: {
-        title: "⚔️ チャレンジカード",
-        owned: "所持数:",
-        use_btn: "所有者に挑戦",
-        no_cards: "このランクのチャレンジカードはありません。",
-        no_targets: "現在挑戦できる所有者がいません。",
-        converted: "⚔️ サーバー上限到達！チャレンジカードを獲得:",
-        sent: "⚔️ 所有者に挑戦を送信しました！",
-        incoming_title: "⚔️ レアカード挑戦！",
-        incoming_desc: "あなたのカードに挑戦が来ました。受諾するかペナルティを支払ってください:",
-        accept: "デュエル受諾 ⚔️",
-        refuse_pay: "拒否して支払う",
-        paid_ok: "💎 ペナルティを支払いカードを守りました。",
-        lost_card: "⚠️ ジェム不足！カードを失いショップに戻りました。",
-        need_online: "⚠️ 挑戦にはインターネット接続が必要です。",
-        close: "閉じる"
-      }
-    };
-
-    function getLang() {
-      const l = (typeof state !== "undefined" && state?.lang) || localStorage.getItem("lang") || "ar";
-      return CH_I18N[l] ? l : "ar";
-    }
-    function tr(key) {
-      return (CH_I18N[getLang()] && CH_I18N[getLang()][key]) || CH_I18N.ar[key] || key;
+    // 1) إزالة أي شريط تحدي زائد فوق الهيدر
+    function removeExtraTopPill() {
+      const extra = document.getElementById("hudChallengePill");
+      if (extra) extra.remove();
     }
 
-    // 1) اختصار الأرقام الكبيرة (K, M, B, T, Q)
+    // 2) اختصار الأرقام الكبيرة (K / M / B / T / Q)
     function formatCompactNum(num) {
       const n = Number(num || 0);
       if (!Number.isFinite(n)) return "0";
@@ -2677,378 +2604,169 @@
       return String(Math.floor(n));
     }
 
-    function ensureChallengeState() {
+    // 3) العثور تلقائياً على مصفوفة المخزون الحقيقية داخل state
+    function getInventoryArrayKey() {
+      if (typeof state === "undefined" || !state) return null;
+      const candidates = ["inventory", "cards", "collection", "myCards", "ownedCards"];
+      for (const k of candidates) {
+        if (Array.isArray(state[k]) && state[k].length > 0) return k;
+      }
+      for (const k of candidates) {
+        if (Array.isArray(state[k])) return k;
+      }
+      return null;
+    }
+
+    // 4) دمج المكررات + أخذ الندرة الأعلى دائماً (لا تنخفض الندرة أبداً)
+    function cleanAndSyncInventory() {
+      try {
+        const keyName = getInventoryArrayKey();
+        if (!keyName) return;
+        const list = state[keyName];
+        if (!Array.isArray(list) || !list.length) return;
+
+        const catalogByName = new Map();
+        if (typeof characterCatalog !== "undefined" && characterCatalog) {
+          characterCatalog.forEach((c) => {
+            if (c && c.name) {
+              catalogByName.set(String(c.name).trim().toLowerCase(), c);
+            }
+          });
+        }
+
+        const merged = new Map();
+        for (const item of list) {
+          if (!item || typeof item !== "object") continue;
+
+          const normName = String(item.name || "").trim().toLowerCase();
+          const catItem =
+            (typeof characterCatalog !== "undefined" && characterCatalog && characterCatalog.get(item.id)) ||
+            catalogByName.get(normName) ||
+            null;
+
+          // نأخذ الندرة الأعلى بين المخزون والكتالوج حتى لا ينخفض تصنيف أي شخصية
+          const itemR = item.rarity || "C";
+          const catR = catItem?.rarity || itemR;
+          const bestRarity =
+            (RARITY_RANK[catR] || 0) >= (RARITY_RANK[itemR] || 0) ? catR : itemR;
+
+          const uniqueKey = normName || String(catItem?.id ?? item.id ?? "");
+          if (!uniqueKey) continue;
+
+          const maxLim = SERVER_LIMITS[bestRarity] || item.maxCopies || item.limit || null;
+
+          if (!merged.has(uniqueKey)) {
+            const copyObj = {
+              ...item,
+              id: catItem?.id ?? item.id,
+              name: catItem?.name || item.name,
+              anime: catItem?.anime || item.anime,
+              image: catItem?.image || item.image,
+              rarity: bestRarity,
+              copies: Math.max(1, Number(item.copies || item.count || 1)),
+              count: Math.max(1, Number(item.copies || item.count || 1))
+            };
+            if (maxLim) {
+              copyObj.maxCopies = maxLim;
+              copyObj.limit = maxLim;
+            }
+            merged.set(uniqueKey, copyObj);
+          } else {
+            const existing = merged.get(uniqueKey);
+            const curRank = RARITY_RANK[existing.rarity] || 0;
+            const newRank = RARITY_RANK[bestRarity] || 0;
+            if (newRank > curRank) existing.rarity = bestRarity;
+
+            // SP نسخة واحدة فقط؛ الباقي يُجمع في العدّاد بدون تكرار الكارت في الشبكة
+            if (existing.rarity === "SP") {
+              existing.copies = 1;
+              existing.count = 1;
+            } else {
+              const total =
+                Math.max(1, Number(existing.copies || existing.count || 1)) +
+                Math.max(1, Number(item.copies || item.count || 1));
+              existing.copies = total;
+              existing.count = total;
+            }
+          }
+        }
+
+        const cleaned = Array.from(merged.values());
+        if (cleaned.length !== list.length) {
+          state[keyName] = cleaned;
+          if (typeof saveState === "function") saveState();
+        } else {
+          state[keyName] = cleaned;
+        }
+      } catch (_) {}
+    }
+
+    // 5) ربط الزر الأحمر الموجود بجانب الجواهر بنافذة بطاقات التحدي (SP / UR / SSR)
+    function bindExistingRedChallengePill() {
+      removeExtraTopPill();
       if (typeof state === "undefined" || !state) return;
       if (!state.challengeCards || typeof state.challengeCards !== "object") {
         state.challengeCards = { SP: 0, UR: 0, SSR: 0 };
       }
-      state.challengeCards.SP = Math.max(0, Number(state.challengeCards.SP || 0));
-      state.challengeCards.UR = Math.max(0, Number(state.challengeCards.UR || 0));
-      state.challengeCards.SSR = Math.max(0, Number(state.challengeCards.SSR || 0));
-    }
 
-    // 2) ضبط حدود السيرفر على البطاقات (SP=1, UR=3, SSR=10)
-    function enforceLimitsOnCatalogAndCards() {
-      try {
-        if (typeof characterCatalog !== "undefined" && characterCatalog) {
-          characterCatalog.forEach((c) => {
-            if (c && SERVER_LIMITS[c.rarity]) {
-              c.maxCopies = SERVER_LIMITS[c.rarity];
-              c.limit = SERVER_LIMITS[c.rarity];
-            }
-          });
-        }
-        if (typeof state !== "undefined" && Array.isArray(state.cards)) {
-          state.cards.forEach((c) => {
-            if (c && SERVER_LIMITS[c.rarity]) {
-              c.maxCopies = SERVER_LIMITS[c.rarity];
-              c.limit = SERVER_LIMITS[c.rarity];
-            }
-          });
-        }
-      } catch (_) {}
-    }
-
-    // 3) التحقق من حد السيرفر عند سحب بطاقة SP / UR / SSR وتحويل الفائض إلى بطاقة تحدي
-    window.claimServerLimitedCard = async function (card) {
-      ensureChallengeState();
-      if (!card || !SERVER_LIMITS[card.rarity]) return { ok: true, converted: false };
-
-      const rarity = card.rarity;
-      const maxAllowed = SERVER_LIMITS[rarity];
-      const cardKey = String(card.id ?? card.name ?? "").replace(/[.#$/[\]]/g, "_");
-
-      if (typeof db !== "undefined" && db && navigator.onLine && cardKey) {
-        try {
-          const ref = db.ref(`server_registry/${rarity}/${cardKey}`);
-          const snap = await ref.get();
-          const owners = snap.exists() && Array.isArray(snap.val().owners) ? snap.val().owners : [];
-
-          if (owners.length >= maxAllowed) {
-            state.challengeCards[rarity] += 1;
-            if (typeof saveState === "function") saveState();
-            updateCompactHudAndPill();
-            if (typeof showToast === "function") showToast(`${tr("converted")} (${rarity})`);
-            return { ok: false, converted: true, rarity };
-          }
-
-          owners.push({
-            uid: state.uid || "local",
-            name: state.name || "Player",
-            at: Date.now()
-          });
-          await ref.set({
-            id: card.id,
-            name: card.name,
-            image: card.image || "",
-            rarity,
-            limit: maxAllowed,
-            owners
-          });
-          return { ok: true, converted: false, serial: owners.length, limit: maxAllowed };
-        } catch (_) {}
-      }
-      return { ok: true, converted: false, limit: maxAllowed };
-    };
-
-    // 4) تحديث الشريط العلوي (اختصار الذهب والجواهر + زر بطاقات التحدي)
-    function updateCompactHudAndPill() {
-      try {
-        ensureChallengeState();
-        const goldIds = ["goldDisplay", "hudGold", "goldAmount", "playerGold"];
-        const gemIds = ["gemsDisplay", "hudGems", "gemsAmount", "playerGems"];
-
-        if (typeof state !== "undefined" && state) {
-          goldIds.forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = formatCompactNum(state.gold);
-          });
-          gemIds.forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = formatCompactNum(state.gems);
-          });
-
-          // تنسيق أي عنصر في الشريط العلوي يحتوي أرقاماً طويلة
-          document.querySelectorAll("header span, .top-bar span, .hud-pill, .currency-pill").forEach((el) => {
-            if (el.id === "hudChallengePill" || el.closest("#hudChallengePill")) return;
-            const txt = (el.textContent || "").trim();
-            if (/^\d{5,}$/.test(txt)) {
-              el.textContent = formatCompactNum(Number(txt));
-            }
-          });
-        }
-
-        const totalCh =
-          (state?.challengeCards?.SP || 0) +
-          (state?.challengeCards?.UR || 0) +
-          (state?.challengeCards?.SSR || 0);
-
-        let pill = document.getElementById("hudChallengePill");
-        if (!pill) {
-          const anchor =
-            document.getElementById("gemsDisplay")?.closest("div, button, span") ||
-            document.querySelector(".top-bar") ||
-            document.querySelector("header");
-          if (anchor && anchor.parentElement) {
-            pill = document.createElement("button");
-            pill.id = "hudChallengePill";
-            pill.type = "button";
-            pill.style.cssText =
-              "display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;background:rgba(239,68,68,0.18);border:1px solid rgba(248,113,113,0.55);color:#fca5a5;font-weight:800;font-size:0.78rem;cursor:pointer;white-space:nowrap;";
-            pill.addEventListener("click", openChallengeCardsModal);
-            anchor.parentElement.insertBefore(pill, anchor);
-          }
-        }
-        if (pill) pill.innerHTML = `⚔️ <span>${formatCompactNum(totalCh)}</span>`;
-      } catch (_) {}
-    }
-
-    // 5) نافذة بطاقات التحدي بـ 3 خانات (SP / UR / SSR)
-    let activeChallengeTab = "SP";
-
-    function openChallengeCardsModal() {
-      ensureChallengeState();
-      let modal = document.getElementById("challengeCardsModal");
-      if (!modal) {
-        modal = document.createElement("div");
-        modal.id = "challengeCardsModal";
-        modal.style.cssText =
-          "position:fixed;inset:0;z-index:9999;background:rgba(2,6,23,0.82);display:flex;align-items:center;justify-content:center;padding:14px;";
-        document.body.appendChild(modal);
-      }
-      modal.style.display = "flex";
-      renderChallengeModalContent();
-    }
-
-    async function renderChallengeModalContent() {
-      const modal = document.getElementById("challengeCardsModal");
-      if (!modal) return;
-      ensureChallengeState();
-
-      const count = state.challengeCards[activeChallengeTab] || 0;
-      const penalty = REFUSE_PENALTY[activeChallengeTab];
-
-      modal.innerHTML = `
-        <div style="width:100%;max-width:420px;max-height:85vh;overflow-y:auto;background:#0f172a;border:1px solid rgba(148,163,184,0.3);border-radius:16px;padding:16px;color:#f8fafc;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h3 style="margin:0;font-size:1rem;">${tr("title")}</h3>
-            <button id="btnCloseChModal" type="button" style="background:transparent;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;">✕</button>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;">
-            ${["SP", "UR", "SSR"]
-              .map((tier) => {
-                const isAct = tier === activeChallengeTab;
-                const c = state.challengeCards[tier] || 0;
-                return `<button type="button" data-chtier="${tier}" style="padding:8px 6px;border-radius:10px;border:1px solid ${
-                  isAct ? "#f59e0b" : "rgba(148,163,184,0.3)"
-                };background:${isAct ? "rgba(245,158,11,0.2)" : "#1e293b"};color:#fff;font-weight:800;font-size:0.82rem;cursor:pointer;">
-                  ${tier} (${c})
-                </button>`;
-              })
-              .join("")}
-          </div>
-          <div style="font-size:0.82rem;color:#cbd5e1;margin-bottom:10px;display:flex;justify-content:space-between;">
-            <span>${tr("owned")} <b style="color:#fbbf24;">${count}</b></span>
-            <span>💎 ${penalty}</span>
-          </div>
-          <div id="challengeTargetsList" style="display:flex;flex-direction:column;gap:8px;min-height:80px;">
-            <div style="text-align:center;color:#94a3b8;font-size:0.82rem;padding:16px;">⏳ ...</div>
-          </div>
-        </div>
-      `;
-
-      modal.querySelector("#btnCloseChModal")?.addEventListener("click", () => {
-        modal.style.display = "none";
+      // اختصار أرقام الشريط العلوي
+      document.querySelectorAll("header span, .top-bar span, .hud-pill, .currency-pill").forEach((el) => {
+        const txt = (el.textContent || "").trim();
+        if (/^\d{5,}$/.test(txt)) el.textContent = formatCompactNum(Number(txt));
       });
-      modal.querySelectorAll("[data-chtier]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          activeChallengeTab = btn.dataset.chtier;
-          renderChallengeModalContent();
+
+      // البحث عن الزر الأحمر الموجود بجانب الجواهر (يحتوي على أيقونة التذكرة أو id مخصص)
+      const redPill =
+        document.getElementById("ticketsDisplay")?.closest("button, div, span") ||
+        document.getElementById("challengeTicketsPill") ||
+        Array.from(document.querySelectorAll("header button, header div, .top-bar button, .top-bar div")).find(
+          (el) => el.childElementCount <= 2 && /🎟|🎫/.test(el.textContent || "")
+        );
+
+      if (redPill && !redPill.dataset.chBound) {
+        redPill.dataset.chBound = "1";
+        redPill.style.cursor = "pointer";
+        redPill.addEventListener("click", () => {
+          const totalSP = Number(state.challengeCards.SP || 0);
+          const totalUR = Number(state.challengeCards.UR || 0);
+          const totalSSR = Number(state.challengeCards.SSR || 0);
+          if (typeof showToast === "function") {
+            showToast(`⚔️ SP: ${totalSP} | UR: ${totalUR} | SSR: ${totalSSR}`);
+          }
         });
-      });
-
-      const listEl = modal.querySelector("#challengeTargetsList");
-      if (!listEl) return;
-
-      if (count <= 0) {
-        listEl.innerHTML = `<div style="text-align:center;color:#94a3b8;font-size:0.82rem;padding:14px;">${tr("no_cards")}</div>`;
-        return;
-      }
-
-      if (typeof db === "undefined" || !db || !navigator.onLine) {
-        listEl.innerHTML = `<div style="text-align:center;color:#fca5a5;font-size:0.82rem;padding:14px;">${tr("need_online")}</div>`;
-        return;
-      }
-
-      try {
-        const snap = await db.ref(`server_registry/${activeChallengeTab}`).get();
-        const targets = [];
-        if (snap.exists()) {
-          snap.forEach((child) => {
-            const item = child.val();
-            if (!item || !Array.isArray(item.owners)) return;
-            item.owners.forEach((ow) => {
-              if (ow && ow.uid && ow.uid !== state.uid) {
-                targets.push({ key: child.key, card: item, owner: ow });
-              }
-            });
-          });
-        }
-
-        if (!targets.length) {
-          listEl.innerHTML = `<div style="text-align:center;color:#94a3b8;font-size:0.82rem;padding:14px;">${tr("no_targets")}</div>`;
-          return;
-        }
-
-        listEl.innerHTML = "";
-        targets.slice(0, 20).forEach((tItem) => {
-          const row = document.createElement("div");
-          row.style.cssText =
-            "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border-radius:10px;background:#1e293b;border:1px solid rgba(148,163,184,0.2);";
-          row.innerHTML = `
-            <div style="min-width:0;">
-              <div style="font-weight:700;font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tItem.card.name}</div>
-              <div style="font-size:0.74rem;color:#94a3b8;">👤 ${tItem.owner.name || "Player"}</div>
-            </div>
-            <button type="button" style="padding:6px 10px;border-radius:8px;border:none;background:#ef4444;color:#fff;font-weight:700;font-size:0.76rem;cursor:pointer;white-space:nowrap;">
-              ${tr("use_btn")}
-            </button>
-          `;
-          row.querySelector("button").addEventListener("click", async () => {
-            await sendCardChallenge(tItem.owner.uid, tItem.card, tItem.key, activeChallengeTab);
-            modal.style.display = "none";
-          });
-          listEl.appendChild(row);
-        });
-      } catch (_) {
-        listEl.innerHTML = `<div style="text-align:center;color:#94a3b8;font-size:0.82rem;padding:14px;">${tr("no_targets")}</div>`;
       }
     }
 
-    async function sendCardChallenge(targetUid, card, cardKey, rarity) {
-      ensureChallengeState();
-      if ((state.challengeCards[rarity] || 0) <= 0) return;
-      if (typeof db === "undefined" || !db || !navigator.onLine) {
-        return typeof showToast === "function" && showToast(tr("need_online"));
-      }
-      const chId = "ch_" + Date.now() + "_" + Math.floor(Math.random() * 999);
-      state.challengeCards[rarity] -= 1;
-      if (typeof saveState === "function") saveState();
-      updateCompactHudAndPill();
-
-      await db.ref(`card_challenges/${targetUid}/${chId}`).set({
-        id: chId,
-        fromUid: state.uid,
-        fromName: state.name || "Player",
-        cardId: card.id,
-        cardKey,
-        cardName: card.name,
-        rarity,
-        penalty: REFUSE_PENALTY[rarity],
-        status: "pending",
-        createdAt: Date.now()
-      });
-
-      if (typeof showToast === "function") showToast(tr("sent"));
-    }
-
-    // 6) استقبال التحدي (قبول النزال أو دفع الغرامة 1000/500/100 أو خسارة البطاقة وعودتها للمتجر)
-    function listenIncomingChallenges() {
-      if (typeof db === "undefined" || !db || typeof state === "undefined" || !state?.uid) return;
-      db.ref(`card_challenges/${state.uid}`).on("child_added", (snap) => {
-        const ch = snap.val();
-        if (!ch || ch.status !== "pending") return;
-        showIncomingChallengePopup(ch, snap.key);
-      });
-    }
-
-    function showIncomingChallengePopup(ch, chKey) {
-      if (document.getElementById("incomingChPopup")) return;
-      const pop = document.createElement("div");
-      pop.id = "incomingChPopup";
-      pop.style.cssText =
-        "position:fixed;inset:0;z-index:10000;background:rgba(2,6,23,0.88);display:flex;align-items:center;justify-content:center;padding:16px;";
-      pop.innerHTML = `
-        <div style="width:100%;max-width:360px;background:#0f172a;border:1px solid #ef4444;border-radius:16px;padding:16px;color:#fff;text-align:center;">
-          <h3 style="margin:0 0 8px;color:#fca5a5;">${tr("incoming_title")}</h3>
-          <p style="font-size:0.84rem;color:#cbd5e1;margin:0 0 10px;">${tr("incoming_desc")}</p>
-          <div style="padding:10px;border-radius:10px;background:#1e293b;margin-bottom:14px;font-weight:800;">
-            ${ch.cardName} <span style="color:#fbbf24;">(${ch.rarity})</span>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <button id="btnAcceptCardCh" type="button" style="padding:10px;border-radius:10px;border:none;background:#22c55e;color:#052e16;font-weight:800;cursor:pointer;">
-              ${tr("accept")}
-            </button>
-            <button id="btnRefuseCardCh" type="button" style="padding:10px;border-radius:10px;border:none;background:#ef4444;color:#fff;font-weight:800;cursor:pointer;">
-              ${tr("refuse_pay")} (${ch.penalty} 💎)
-            </button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(pop);
-
-      pop.querySelector("#btnAcceptCardCh").addEventListener("click", async () => {
-        await db.ref(`card_challenges/${state.uid}/${chKey}/status`).set("accepted");
-        pop.remove();
-        if (typeof showToast === "function") showToast("⚔️ " + tr("accept"));
-      });
-
-      pop.querySelector("#btnRefuseCardCh").addEventListener("click", async () => {
-        const penalty = Number(ch.penalty || REFUSE_PENALTY[ch.rarity] || 100);
-        if (Number(state.gems || 0) >= penalty) {
-          state.gems -= penalty;
-          if (typeof saveState === "function") saveState();
-          if (typeof updateHud === "function") updateHud();
-          updateCompactHudAndPill();
-          await db.ref(`card_challenges/${state.uid}/${chKey}/status`).set("paid");
-          if (typeof showToast === "function") showToast(tr("paid_ok"));
-        } else {
-          // لا يملك جواهر كافية -> يخسر البطاقة وتعود للمتجر
-          if (Array.isArray(state.cards)) {
-            const idx = state.cards.findIndex(
-              (c) => c && (String(c.id) === String(ch.cardId) || c.name === ch.cardName)
-            );
-            if (idx !== -1) state.cards.splice(idx, 1);
-          }
-          if (typeof saveState === "function") saveState();
-          if (typeof renderInventory === "function") renderInventory();
-
-          // إزالة الملكية من سجل السيرفر لتعود البطاقة متاحة في المتجر
-          try {
-            const regRef = db.ref(`server_registry/${ch.rarity}/${ch.cardKey}/owners`);
-            const s = await regRef.get();
-            if (s.exists() && Array.isArray(s.val())) {
-              const filtered = s.val().filter((o) => o && o.uid !== state.uid);
-              await regRef.set(filtered);
-            }
-          } catch (_) {}
-
-          await db.ref(`card_challenges/${state.uid}/${chKey}/status`).set("forfeited");
-          if (typeof showToast === "function") showToast(tr("lost_card"));
-        }
-        pop.remove();
-      });
-    }
-
-    // ربط التحديث التلقائي مع updateHud
-    if (typeof updateHud === "function") {
-      const origUpdateHud = updateHud;
-      updateHud = function () {
-        const res = origUpdateHud.apply(this, arguments);
-        updateCompactHudAndPill();
-        return res;
+    if (typeof renderInventory === "function") {
+      const origRenderInv = renderInventory;
+      renderInventory = function () {
+        cleanAndSyncInventory();
+        return origRenderInv.apply(this, arguments);
       };
     }
 
-    enforceLimitsOnCatalogAndCards();
-    updateCompactHudAndPill();
+    if (typeof updateHud === "function") {
+      const origHud = updateHud;
+      updateHud = function () {
+        const r = origHud.apply(this, arguments);
+        bindExistingRedChallengePill();
+        return r;
+      };
+    }
+
+    removeExtraTopPill();
+    cleanAndSyncInventory();
+    bindExistingRedChallengePill();
     setTimeout(() => {
-      enforceLimitsOnCatalogAndCards();
-      updateCompactHudAndPill();
-      listenIncomingChallenges();
-    }, 1500);
+      removeExtraTopPill();
+      cleanAndSyncInventory();
+      bindExistingRedChallengePill();
+      if (typeof renderInventory === "function") renderInventory();
+    }, 1200);
   } catch (_) {}
 })();
+
+               
 
 })();
 
