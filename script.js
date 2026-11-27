@@ -2960,8 +2960,8 @@
     setTimeout(updateRedTicketPill, 1200);
   } catch (_) {}
 })();
-/* === نظام شراء عدة حزم دفعة واحدة + عرض جميع البطاقات جملة (4 لغات) === */
-(function enableBulkPackOpening() {
+/* === نظام شراء الحزم بالجملة (فائق السرعة + قراءة دقيقة للأسعار + 4 لغات) === */
+(function enableBulkPackOpeningFast() {
   try {
     const RARITY_ORDER = { SP: 7, UR: 6, SSR: 5, SR: 4, R: 3, C: 2, N: 1 };
     const RARITY_COLORS = {
@@ -2982,7 +2982,6 @@
         buy: "شراء وفتح الكل ⚡",
         cancel: "إلغاء",
         results: "🎉 نتائج فتح الحزم",
-        pulled: "إجمالي البطاقات:",
         ch_gained: "⚔️ بطاقات تحدي مكتسبة:",
         no_funds: "⚠️ رصيدك غير كافٍ لشراء هذا العدد!",
         close: "ممتاز ✓"
@@ -2994,7 +2993,6 @@
         buy: "Buy & Open All ⚡",
         cancel: "Cancel",
         results: "🎉 Pack Opening Results",
-        pulled: "Total Cards:",
         ch_gained: "⚔️ Challenge Cards Gained:",
         no_funds: "⚠️ Not enough balance for this quantity!",
         close: "Awesome ✓"
@@ -3006,7 +3004,6 @@
         buy: "Acheter & Ouvrir ⚡",
         cancel: "Annuler",
         results: "🎉 Résultats d'ouverture",
-        pulled: "Cartes obtenues :",
         ch_gained: "⚔️ Cartes de défi gagnées :",
         no_funds: "⚠️ Solde insuffisant pour cette quantité !",
         close: "Super ✓"
@@ -3018,7 +3015,6 @@
         buy: "購入して一括開封 ⚡",
         cancel: "キャンセル",
         results: "🎉 開封結果",
-        pulled: "獲得カード数:",
         ch_gained: "⚔️ 獲得チャレンジカード:",
         no_funds: "⚠️ 残高が不足しています！",
         close: "OK ✓"
@@ -3054,44 +3050,48 @@
       const key = getInvKey();
       const map = new Map();
       if (key && Array.isArray(state[key])) {
-        state[key].forEach((c) => {
-          if (!c) return;
+        for (let i = 0; i < state[key].length; i++) {
+          const c = state[key][i];
+          if (!c) continue;
           const id = String(c.name || c.id || "").trim().toLowerCase();
           const count = Math.max(1, Number(c.copies || c.count || 1));
           map.set(id, (map.get(id) || 0) + count);
-        });
+        }
       }
       return map;
     }
 
+    // قراءة السعر الحقيقي حتى مع وجود مسافات أو فواصل مثل "5 000" أو "2,500"
+    function parsePriceFromText(txt) {
+      const cleaned = String(txt || "").replace(/[\s,\u00A0\u202F.]/g, "");
+      const m = cleaned.match(/(\d+)/);
+      return m ? Number(m[1]) : 0;
+    }
+
     let isBulkRunning = false;
 
-    // اعتراض النقر على أزرار شراء الحزم في المتجر
     document.addEventListener(
       "click",
       function (e) {
         if (isBulkRunning) return;
         const btn = e.target?.closest("button");
-        if (!btn) return;
-        if (btn.closest("#bulkPackModal, #bulkResultsModal")) return;
+        if (!btn || btn.closest("#bulkPackModal, #bulkResultsModal")) return;
 
-        // التأكد أن الزر هو زر شراء حزمة داخل المتجر
         const cardEl = btn.closest(".shop-item, .pack-card, .shop-card, [class*='pack'], [class*='shop']");
         if (!cardEl) return;
 
         const txt = (btn.textContent || "").trim();
-        const numMatch = txt.match(/(\d+)/);
-        if (!numMatch) return;
+        const unitPrice = parsePriceFromText(txt);
+        if (!unitPrice) return;
 
-        const isGold = /🪙|ذهب|gold/i.test(txt) || btn.className.includes("gold") || btn.style.background.includes("gold");
         const isGem = /💎|جوهر|gem/i.test(txt) || btn.className.includes("gem") || btn.className.includes("blue");
+        const isGold = /🪙|ذهب|gold/i.test(txt) || btn.className.includes("gold");
         if (!isGold && !isGem) return;
 
         e.preventDefault();
         e.stopPropagation();
 
-        const unitPrice = Number(numMatch[1]);
-        const currency = isGem && !isGold ? "gems" : "gold";
+        const currency = isGem ? "gems" : "gold";
         const packTitle =
           cardEl.querySelector("h3, h4, .pack-name, .pack-title")?.textContent?.trim() || bt("title");
 
@@ -3109,13 +3109,14 @@
 
       const modal = document.createElement("div");
       modal.id = "bulkPackModal";
+      // بدون backdrop-filter لخفة فائقة على الهواتف
       modal.style.cssText =
-        "position:fixed;inset:0;z-index:10001;background:rgba(2,6,23,0.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;";
+        "position:fixed;inset:0;z-index:10001;background:rgba(2,6,23,0.86);display:flex;align-items:center;justify-content:center;padding:16px;";
 
       function renderModal() {
         const total = unitPrice * qty;
         modal.innerHTML = `
-          <div style="width:100%;max-width:360px;background:#0f172a;border:1px solid rgba(56,189,248,0.4);border-radius:18px;padding:18px;color:#f8fafc;box-shadow:0 20px 50px rgba(0,0,0,0.6);">
+          <div style="width:100%;max-width:360px;background:#0f172a;border:1px solid rgba(56,189,248,0.4);border-radius:18px;padding:18px;color:#f8fafc;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
               <h3 style="margin:0;font-size:1rem;color:#38bdf8;">${packTitle}</h3>
               <button id="btnBulkClose" type="button" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;">✕</button>
@@ -3179,7 +3180,7 @@
             return;
           }
           modal.remove();
-          executeBulkPurchase(targetBtn, qty);
+          executeBulkPurchaseFast(targetBtn, qty);
         });
       }
 
@@ -3187,13 +3188,27 @@
       renderModal();
     }
 
-    function executeBulkPurchase(targetBtn, count) {
+    function executeBulkPurchaseFast(targetBtn, count) {
       const beforeInv = snapshotInventory();
       const beforeCh = {
         SP: Number(state?.challengeCards?.SP || 0),
         UR: Number(state?.challengeCards?.UR || 0),
         SSR: Number(state?.challengeCards?.SSR || 0)
       };
+
+      // إيقاف الحفظ والرسم والأصوات مؤقتاً أثناء الحلقة لسرعة فورية
+      const origSave = typeof saveState === "function" ? saveState : null;
+      const origHud = typeof updateHud === "function" ? updateHud : null;
+      const origInv = typeof renderInventory === "function" ? renderInventory : null;
+      const origToast = typeof showToast === "function" ? showToast : null;
+      const origSfx = typeof playSfx === "function" ? playSfx : null;
+
+      const noop = () => {};
+      if (origSave) saveState = noop;
+      if (origHud) updateHud = noop;
+      if (origInv) renderInventory = noop;
+      if (origToast) showToast = noop;
+      if (origSfx) playSfx = noop;
 
       isBulkRunning = true;
       try {
@@ -3202,28 +3217,37 @@
         }
       } finally {
         isBulkRunning = false;
+        if (origSave) saveState = origSave;
+        if (origHud) updateHud = origHud;
+        if (origInv) renderInventory = origInv;
+        if (origToast) showToast = origToast;
+        if (origSfx) playSfx = origSfx;
       }
 
-      // إغلاق أي نافذة فتح فردية ظهرت أثناء الشراء
+      // حفظ وتحديث الواجهة مرة واحدة فقط بعد الانتهاء
+      if (origSave) origSave();
+      if (origHud) origHud();
+      if (origSfx) origSfx("win");
+
       document.querySelectorAll(".modal, [id*='packModal'], [id*='PackModal'], [id*='revealModal']").forEach((m) => {
         if (m.id !== "bulkResultsModal" && !m.classList.contains("hidden")) {
           m.classList.add("hidden");
         }
       });
 
-      // حساب البطاقات الجديدة التي ظهرت
       const key = getInvKey();
       const pulledList = [];
       if (key && Array.isArray(state[key])) {
-        state[key].forEach((c) => {
-          if (!c) return;
+        for (let i = 0; i < state[key].length; i++) {
+          const c = state[key][i];
+          if (!c) continue;
           const id = String(c.name || c.id || "").trim().toLowerCase();
           const nowCount = Math.max(1, Number(c.copies || c.count || 1));
           const prevCount = beforeInv.get(id) || 0;
           if (nowCount > prevCount) {
             pulledList.push({ card: c, gained: nowCount - prevCount });
           }
-        });
+        }
       }
 
       const chGained = {
@@ -3250,7 +3274,7 @@
       const modal = document.createElement("div");
       modal.id = "bulkResultsModal";
       modal.style.cssText =
-        "position:fixed;inset:0;z-index:10002;background:rgba(2,6,23,0.9);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:14px;";
+        "position:fixed;inset:0;z-index:10002;background:rgba(2,6,23,0.92);display:flex;align-items:center;justify-content:center;padding:14px;";
 
       modal.innerHTML = `
         <div style="width:100%;max-width:440px;max-height:85vh;display:flex;flex-direction:column;background:#0f172a;border:1px solid rgba(251,191,36,0.45);border-radius:18px;padding:16px;color:#fff;">
@@ -3279,7 +3303,7 @@
                         ? `<span style="position:absolute;top:4px;left:4px;padding:2px 5px;border-radius:6px;background:rgba(0,0,0,0.75);color:#fbbf24;font-size:0.65rem;font-weight:800;">×${gained}</span>`
                         : ""
                     }
-                    <img src="${card.image || ""}" alt="${card.name || ""}" style="width:100%;height:96px;object-fit:cover;display:block;" />
+                    <img loading="lazy" decoding="async" src="${card.image || ""}" alt="${card.name || ""}" style="width:100%;height:96px;object-fit:cover;display:block;" />
                     <div style="padding:4px;font-size:0.7rem;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${card.name || ""}</div>
                   </div>
                 `;
@@ -3299,8 +3323,6 @@
     }
   } catch (_) {}
 })();
-
-               
 
 })();
 
