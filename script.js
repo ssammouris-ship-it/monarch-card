@@ -2667,6 +2667,12 @@ saveCharCache = function () {
 // 2. جلب وتحديث الشخصيات تلقائياً في الخلفية عند الدخول (بالإنترنت فقط)
 async function autoExpandCatalogOnStart(pagesToFetch = 3) {
   if (!navigator.onLine) return;
+
+  // حساب الصفحة التالية بعد اكتمال تحميل الـ 630 شخصية من الذاكرة
+  const savedC = Number(localStorage.getItem(CURSOR_KEY)) || 1;
+  const minPage = Math.floor(characterCatalog.size / 50) + 1;
+  codexPageCursor = Math.max(codexPageCursor, savedC, minPage);
+
   const query = `query ($page: Int) {
     Page(page: $page, perPage: 50) {
       characters(sort: FAVOURITES_DESC) {
@@ -2682,9 +2688,14 @@ async function autoExpandCatalogOnStart(pagesToFetch = 3) {
     }
   }`;
 
-  for (let i = 0; i < pagesToFetch; i++) {
+  let addedPages = 0;
+  let attempts = 0;
+
+  while (addedPages < pagesToFetch && attempts < 6) {
     if (!navigator.onLine) break;
+    attempts++;
     try {
+      const beforeSize = characterCatalog.size;
       const res = await fetch(ANILIST_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -2711,10 +2722,15 @@ async function autoExpandCatalogOnStart(pagesToFetch = 3) {
 
       codexPageCursor++;
       saveCharCache();
-      await new Promise((r) => setTimeout(r, 900));
+      if (characterCatalog.size > beforeSize) {
+        addedPages++;
+        if (typeof renderCodex === "function") renderCodex();
+      }
+      await new Promise((r) => setTimeout(r, 1200));
     } catch (_) {
       break;
     }
   }
 }
-setTimeout(() => autoExpandCatalogOnStart(3), 1500);
+
+setTimeout(() => autoExpandCatalogOnStart(3), 3000);
