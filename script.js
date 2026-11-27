@@ -2821,6 +2821,312 @@ finalizeOnlineMatchRewards = async function (room) {
   saveState();
   updateHud();
 };
+  /* ==========================================================================
+   الدفعة 1: معاينة 10ث + خلط سريع 15ث + حذف الألغاز (50/100/150) + تصنيف VIP + الحزم الخرافية
+   ========================================================================== */
+(function applyPhase1Upgrade() {
+  /* --- 1. تحديث وقت المعاينة (10 ثوانٍ) والخلط السريع (15 ثانية) أونلاين --- */
+  startOnlineVisibleShuffle = function (room) {
+    if (onlinePreviewStartedFor === room.code) return;
+    onlinePreviewStartedFor = room.code;
+    if (activeShuffleInterval) clearInterval(activeShuffleInterval);
+
+    const statusBanner = document.getElementById("onlineDuelStatus");
+    renderOnlineBoard(room, true);
+
+    let previewLeft = 10;
+    if (statusBanner) statusBanner.textContent = `👀 احفظ أماكن البطاقات! سيبدأ الخلط خلال ${previewLeft} ثانية...`;
+
+    const previewTimer = setInterval(() => {
+      previewLeft--;
+      if (previewLeft > 0) {
+        if (statusBanner) statusBanner.textContent = `👀 احفظ أماكن البطاقات! سيبدأ الخلط خلال ${previewLeft} ثانية...`;
+      } else {
+        clearInterval(previewTimer);
+        renderOnlineBoard(room, false);
+
+        let secondsLeft = 15;
+        let cardsOrder = [...(room.cards || [])];
+        let seed = Number(room.code) || 1234;
+        const nextRand = () => {
+          seed = (seed * 9301 + 49297) % 233280;
+          return seed / 233280;
+        };
+
+        const doFastSwap = () => {
+          const board = document.getElementById("onlineBoard");
+          if (!board || board.children.length < 6) return;
+          const i = Math.floor(nextRand() * 6);
+          let j = Math.floor(nextRand() * 6);
+          if (i === j) j = (i + 1) % 6;
+
+          [cardsOrder[i], cardsOrder[j]] = [cardsOrder[j], cardsOrder[i]];
+
+          const elA = board.children[i];
+          const elB = board.children[j];
+          const rectA = elA.getBoundingClientRect();
+          const rectB = elB.getBoundingClientRect();
+          const dx = rectB.left - rectA.left;
+          const dy = rectB.top - rectA.top;
+
+          elA.style.transition = "transform 0.15s ease";
+          elB.style.transition = "transform 0.15s ease";
+          elA.style.transform = `translate(${dx}px, ${dy}px)`;
+          elB.style.transform = `translate(${-dx}px, ${-dy}px)`;
+
+          setTimeout(() => {
+            elA.style.transition = "none";
+            elB.style.transition = "none";
+            elA.style.transform = "";
+            elB.style.transform = "";
+          }, 160);
+        };
+
+        if (statusBanner) statusBanner.textContent = `⚡ خلط فائق السرعة... متبقي ${secondsLeft} ثانية`;
+        let tick = 0;
+        activeShuffleInterval = setInterval(async () => {
+          tick++;
+          doFastSwap();
+          if (tick % 5 === 0) {
+            secondsLeft--;
+            if (statusBanner) statusBanner.textContent = `⚡ خلط فائق السرعة... متبقي ${secondsLeft} ثانية`;
+          }
+          if (secondsLeft <= 0) {
+            clearInterval(activeShuffleInterval);
+            activeShuffleInterval = null;
+            if (currentRole === "p1") {
+              await db.ref(`duels/${room.code}`).update({ cards: cardsOrder, status: "playing" });
+            }
+          }
+        }, 200); // 5 تبديلات في الثانية = 75 تبديلة في 15 ثانية
+      }
+    }, 1000);
+  };
+
+  /* --- 2. زر حذف إجابة واحدة في الألغاز بتكلفة متصاعدة (50 -> 100 -> 150 ذهب) --- */
+  const HINT_COSTS = [50, 100, 150];
+  let hintUsedCount = 0;
+
+  function updateHintBtnUI(btn) {
+    if (!btn) return;
+    if (hintUsedCount >= HINT_COSTS.length) {
+      btn.disabled = true;
+      btn.textContent = "✂️ تم حذف كل الأخطاء";
+    } else {
+      btn.disabled = false;
+      btn.textContent = `✂️ حذف إجابة (${HINT_COSTS[hintUsedCount]} 🪙)`;
+    }
+  }
+
+  const origHintBtn = document.getElementById("btnTrivia5050");
+  if (origHintBtn) {
+    const newHintBtn = origHintBtn.cloneNode(true);
+    origHintBtn.replaceWith(newHintBtn);
+    updateHintBtnUI(newHintBtn);
+
+    const optionsBox = document.getElementById("triviaOptions");
+    if (optionsBox) {
+      new MutationObserver(() => {
+        hintUsedCount = 0;
+        updateHintBtnUI(newHintBtn);
+      }).observe(optionsBox, { childList: true });
+    }
+
+    newHintBtn.addEventListener("click", () => {
+      if (hintUsedCount >= HINT_COSTS.length) return;
+      const cost = HINT_COSTS[hintUsedCount];
+      if (state.gold < cost) return showToast(`⚠️ تحتاج ${cost} ذهب لحذف إجابة`);
+
+      const optionBtns = Array.from(document.querySelectorAll("#triviaOptions button"))
+        .filter((b) => !b.disabled && b.style.visibility !== "hidden" && b.style.opacity !== "0.25");
+
+      if (optionBtns.length <= 1) return;
+
+      // تحديد الإجابة الصحيحة من بيانات السؤال الحالية أو الخاصية المرفقة
+      const correctAnswer =
+        (typeof currentTriviaAnswer !== "undefined" && currentTriviaAnswer) ||
+        (typeof currentTrivia !== "undefined" && currentTrivia?.answer) ||
+        "";
+
+      const wrongBtns = optionBtns.filter((b) => {
+        const isCorrectAttr = b.dataset.correct === "true" || b.dataset.isCorrect === "1";
+        const matchesText = correctAnswer && b.textContent.trim() === String(correctAnswer).trim();
+        return !isCorrectAttr && !matchesText;
+      });
+
+      if (wrongBtns.length === 0) return;
+
+      const victim = wrongBtns[Math.floor(Math.random() * wrongBtns.length)];
+      victim.disabled = true;
+      victim.style.opacity = "0.25";
+      victim.style.textDecoration = "line-through";
+
+      state.gold -= cost;
+      hintUsedCount++;
+      saveState();
+      updateHud();
+      playSfx("click");
+      updateHintBtnUI(newHintBtn);
+    });
+  }
+
+  /* --- 3. قائمة VIP لتصحيح تصنيف الشخصيات الأيقونية تلقائياً --- */
+  const VIP_RARITIES = {
+    "monkey d. luffy": "SP", "satoru gojo": "SP", "son goku": "SP", "guts": "SP",
+    "sung jin-woo": "SP", "ryomen sukuna": "SP", "sosuke aizen": "SP", "madara uchiha": "SP",
+    "naruto uzumaki": "UR", "sasuke uchiha": "UR", "itachi uchiha": "UR", "roronoa zoro": "UR",
+    "levi": "UR", "levi ackerman": "UR", "eren yeager": "UR", "ichigo kurosaki": "UR",
+    "light yagami": "UR", "l lawliet": "UR", "lelouch lamperouge": "UR", "saitama": "UR",
+    "kisuke urahara": "UR", "ryuk": "UR", "killua zoldyck": "UR", "hisoka morow": "UR",
+    "sebastian michaelis": "SSR", "roy mustang": "SSR", "edward elric": "SSR",
+    "keigo takami": "SSR", "shinei nouzen": "SSR", "ken kaneki": "SSR", "vegeta": "SSR"
+  };
+
+  function applyVipRarities() {
+    if (typeof characterCatalog !== "undefined" && characterCatalog?.forEach) {
+      characterCatalog.forEach((char) => {
+        const key = (char.name || "").trim().toLowerCase();
+        if (VIP_RARITIES[key]) char.rarity = VIP_RARITIES[key];
+      });
+    }
+    if (Array.isArray(state.inventory)) {
+      let changed = false;
+      state.inventory.forEach((card) => {
+        const key = (card.name || "").trim().toLowerCase();
+        if (VIP_RARITIES[key] && card.rarity !== VIP_RARITIES[key]) {
+          card.rarity = VIP_RARITIES[key];
+          changed = true;
+        }
+      });
+      if (changed) saveState();
+    }
+  }
+  applyVipRarities();
+  setInterval(applyVipRarities, 8000);
+
+  /* --- 4. تطوير المتجر + الحزم الخرافية الثلاث (SSR / UR / SP) مع أنيميشن الفتح --- */
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .mythic-pack-card {
+      position: relative; overflow: hidden; border-radius: 16px; padding: 16px;
+      display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
+      background: linear-gradient(145deg, #0f172a, #1e293b);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .mythic-pack-card:active { transform: scale(0.98); }
+    .pack-ssr { border: 2px solid #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.35); }
+    .pack-ur  { border: 2px solid #ef4444; box-shadow: 0 0 22px rgba(239, 68, 68, 0.45); }
+    .pack-sp  { border: 2px solid #a855f7; box-shadow: 0 0 26px rgba(168, 85, 247, 0.6); }
+    .mythic-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 800; letter-spacing: 0.5px; color: #fff;
+    }
+    .pack-ssr .mythic-badge { background: linear-gradient(90deg, #d97706, #f59e0b); }
+    .pack-ur  .mythic-badge { background: linear-gradient(90deg, #dc2626, #f97316); }
+    .pack-sp  .mythic-badge { background: linear-gradient(90deg, #7e22ce, #ec4899); }
+    #mythicOpenOverlay {
+      position: fixed; inset: 0; z-index: 99999; background: rgba(2, 6, 23, 0.92);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 20px; text-align: center; backdrop-filter: blur(6px);
+    }
+    @keyframes packShake {
+      0%, 100% { transform: rotate(0deg) scale(1); }
+      25% { transform: rotate(-6deg) scale(1.06); }
+      50% { transform: rotate(6deg) scale(1.1); }
+      75% { transform: rotate(-4deg) scale(1.06); }
+    }
+    .pack-shaking { animation: packShake 0.35s infinite; font-size: 64px; }
+  `;
+  document.head.appendChild(styleEl);
+
+  const MYTHIC_PACKS = [
+    {
+      id: "mythic_ssr", rarity: "SSR", cls: "pack-ssr", title: "👑 حزمة SSR الخرافية",
+      gems: 1000, goldReward: 15000, desc: "بطاقة SSR مضمونة + 15,000 🪙 ذهب فوري"
+    },
+    {
+      id: "mythic_ur", rarity: "UR", cls: "pack-ur", title: "🔥 حزمة UR الأسطورية",
+      gems: 2500, goldReward: 50000, desc: "بطاقة UR مضمونة + 50,000 🪙 ذهب فوري"
+    },
+    {
+      id: "mythic_sp", rarity: "SP", cls: "pack-sp", title: "🌌 حزمة SP الكونية",
+      gems: 5000, goldReward: 100000, desc: "بطاقة SP نادرة مضمونة + 100,000 🪙 ذهب فوري"
+    }
+  ];
+
+  function openMythicPack(pack) {
+    if (state.gems < pack.gems) return showToast(`⚠️ تحتاج ${pack.gems} 💎 لشراء هذه الحزمة`);
+    applyVipRarities();
+
+    const allChars = Array.from(characterCatalog.values());
+    let pool = allChars.filter((c) => c.rarity === pack.rarity);
+    if (pool.length === 0) pool = allChars;
+    if (pool.length === 0) return showToast("⚠️ انتظر تحميل الشخصيات أولاً");
+
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    const newCard = {
+      uidCard: "crd_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      charId: chosen.id,
+      name: chosen.name,
+      image: chosen.image,
+      rarity: pack.rarity,
+      acquiredAt: Date.now()
+    };
+
+    state.gems -= pack.gems;
+    state.gold += pack.goldReward;
+    state.inventory.push(newCard);
+    saveState();
+    updateHud();
+    if (typeof renderInventory === "function") renderInventory(true);
+    playSfx("win");
+
+    // عرض أنيميشن فتح الحزمة
+    const overlay = document.createElement("div");
+    overlay.id = "mythicOpenOverlay";
+    overlay.innerHTML = `<div class="pack-shaking">🎁</div><h2 style="color:#fff;margin-top:16px;">جاري فتح ${pack.title}...</h2>`;
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      overlay.innerHTML = `
+        <div style="max-width:300px; width:100%; background:#0f172a; border-radius:18px; padding:18px; border:2px solid #f59e0b; box-shadow:0 0 35px rgba(245,158,11,0.5);">
+          <span class="mythic-badge" style="background:#f59e0b; margin-bottom:10px;">${pack.rarity}</span>
+          <img src="${newCard.image}" alt="${newCard.name}" style="width:100%; height:240px; object-fit:cover; border-radius:12px; margin-bottom:10px;" />
+          <h3 style="color:#fff; margin:6px 0;">${newCard.name}</h3>
+          <p style="color:#fbbf24; font-weight:bold; font-size:16px; margin:8px 0;">+${pack.goldReward.toLocaleString()} 🪙 ذهب!</p>
+          <button id="btnCloseMythicOverlay" class="primary-btn" style="width:100%; margin-top:10px;">رائع! استلام</button>
+        </div>
+      `;
+      document.getElementById("btnCloseMythicOverlay")?.addEventListener("click", () => overlay.remove());
+    }, 1500);
+  }
+
+  function injectMythicPacks() {
+    const grid = document.getElementById("shopPacksGrid");
+    if (!grid || grid.querySelector(".mythic-pack-card")) return;
+
+    MYTHIC_PACKS.forEach((pack) => {
+      const card = document.createElement("div");
+      card.className = `mythic-pack-card ${pack.cls}`;
+      card.innerHTML = `
+        <div>
+          <span class="mythic-badge">${pack.rarity} مضمون</span>
+          <h3 style="color:#fff; margin:8px 0 4px;">${pack.title}</h3>
+          <p style="color:#cbd5e1; font-size:13px; margin:0;">${pack.desc}</p>
+        </div>
+        <button type="button" class="primary-btn" style="width:100%; margin-top:8px;">شراء بـ ${pack.gems.toLocaleString()} 💎</button>
+      `;
+      card.querySelector("button").addEventListener("click", () => openMythicPack(pack));
+      grid.appendChild(card);
+    });
+  }
+
+  injectMythicPacks();
+  const shopGrid = document.getElementById("shopPacksGrid");
+  if (shopGrid) {
+    new MutationObserver(injectMythicPacks).observe(shopGrid, { childList: true });
+  }
+})();
 
 })();
 function forceOfflineEnterApp() {
