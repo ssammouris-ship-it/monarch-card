@@ -2401,6 +2401,184 @@
   applyExtraLegends();
   setTimeout(applyExtraLegends, 2000);
 })();
+/* === الخطوة التالية: النزال التلقائي السريع (Quick Match) عبر Firebase === */
+(function applyQuickMatchFeature() {
+  let quickMatchTimer = null;
+  let quickMatchQueueCode = null;
+  let quickMatchPollRef = null;
+
+  function injectQuickMatchUi() {
+    const createBtn = document.getElementById("btnCreateRoom");
+    if (!createBtn || document.getElementById("btnQuickMatch")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "quickMatchWrap";
+    wrap.style.cssText = "margin-top:10px;display:flex;flex-direction:column;gap:8px;";
+
+    const btn = document.createElement("button");
+    btn.id = "btnQuickMatch";
+    btn.type = "button";
+    btn.className = "secondary-btn full-w";
+    btn.style.cssText = "border-color:rgba(56,189,248,0.55);background:linear-gradient(135deg,#0f2942,#163859);color:#e0f2fe;font-weight:800;";
+    btn.textContent = "⚡ بحث تلقائي عن خصم (Quick Match)";
+
+    const statusEl = document.createElement("div");
+    statusEl.id = "quickMatchStatus";
+    statusEl.className = "muted-text hidden";
+    statusEl.style.cssText = "text-align:center;font-size:0.82rem;padding:8px;border-radius:10px;background:rgba(15,23,42,0.75);border:1px solid rgba(56,189,248,0.3);";
+
+    wrap.appendChild(btn);
+    wrap.appendChild(statusEl);
+    createBtn.insertAdjacentElement("afterend", wrap);
+
+    btn.addEventListener("click", startOrCancelQuickMatch);
+  }
+
+  function stopQuickMatchSearch(removeQueueRoom = true) {
+    if (quickMatchTimer) {
+      clearTimeout(quickMatchTimer);
+      quickMatchTimer = null;
+    }
+    if (quickMatchPollRef) {
+      quickMatchPollRef.off();
+      quickMatchPollRef = null;
+    }
+    if (removeQueueRoom && quickMatchQueueCode && db) {
+      db.ref(`duels/${quickMatchQueueCode}`).remove().catch(() => {});
+    }
+    quickMatchQueueCode = null;
+
+    const btn = document.getElementById("btnQuickMatch");
+    const statusEl = document.getElementById("quickMatchStatus");
+    if (btn) btn.textContent = "⚡ بحث تلقائي عن خصم (Quick Match)";
+    if (statusEl) {
+      statusEl.classList.add("hidden");
+      statusEl.textContent = "";
+    }
+  }
+
+  async function startOrCancelQuickMatch() {
+    if (quickMatchQueueCode) {
+      stopQuickMatchSearch(true);
+      showToast("تم إلغاء البحث التلقائي");
+      return;
+    }
+
+    if (!db || !navigator.onLine) {
+      return showToast("⚠️ يلزم اتصال بالإنترنت للبحث التلقائي");
+    }
+
+    if (characterCatalog.size < 6) {
+      await ensureRichCatalog();
+      if (characterCatalog.size < 6) return showToast("⏳ جاري تحميل الشخصيات...");
+    }
+
+    const mode = selectedDuelMode || "safe";
+    const goldStake = mode === "safe"
+      ? Math.max(0, Math.floor(Number(document.getElementById("inputGoldStake")?.value) || 0))
+      : 0;
+    const gemsStake = mode === "stake_gems" ? (selectedGemsStake || 30) : 0;
+
+    if (mode === "safe" && goldStake > 0 && state.gold < goldStake) {
+      return showToast(t("msg_no_gold"));
+    }
+    if (mode === "stake_gems" && state.gems < gemsStake) {
+      return showToast(t("msg_no_gems"));
+    }
+
+    const btn = document.getElementById("btnQuickMatch");
+    const statusEl = document.getElementById("quickMatchStatus");
+    if (btn) btn.textContent = "✖️ إلغاء البحث التلقائي...";
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.textContent = "🔎 جاري البحث عن غرفة متاحة بنفس النمط...";
+    }
+
+    try {
+      const snap = await db.ref("duels").limitToLast(25).get();
+      let matchedRoom = null;
+
+      if (snap.exists()) {
+        snap.forEach((child) => {
+          const r = child.val();
+          if (!r || matchedRoom) return;
+          const isOpen = r.status === "waiting" && !r.p2 && r.p1?.uid !== state.uid;
+          const sameMode = (r.duelType || "safe") === mode;
+          const sameGold = mode !== "safe" || Number(r.goldStake || 0) === goldStake;
+          const sameGems = mode !== "stake_gems" || Number(r.gemsStake || 30) === gemsStake;
+
+          if (isOpen && sameMode && sameGold && sameGems) {
+            matchedRoom = r;
+          }
+        });
+      }
+
+      if (matchedRoom) {
+        stopQuickMatchSearch(false);
+        const inputEl = document.getElementById("inputRoomCode");
+        if (inputEl) inputEl.value = matchedRoom.code;
+        await joinOnlineRoom(matchedRoom.code);
+        return;
+      }
+
+      // إنشاء غرفة انتظار عامة إذا لم توجد غرفة جاهزة
+      const code = String(Math.floor(1000 + Math.random() * 9000));
+      const boardCards = pickSixUniqueRarityCards().map((c) => ({
+        id: c.id, name: c.name, image: c.image, rarity: c.rarity
+      }));
+
+      await db.ref(`duels/${code}`).set({
+        code,
+        duelType: mode,
+        goldStake,
+        gemsStake,
+        isQuickMatch: true,
+        status: "waiting",
+        turn: "p1",
+        cards: boardCards,
+        picked: ["", "", "", "", "", ""],
+        p1: { uid: state.uid, name: state.name, consent: false, stakeCard: null },
+        p2: null,
+        createdAt: Date.now()
+      });
+
+      quickMatchQueueCode = code;
+      if (statusEl) {
+        statusEl.textContent = `⏳ تم إنشاء غرفة انتظار (${code}) — بانتظار انضمام خصم...`;
+      }
+
+      quickMatchPollRef = db.ref(`duels/${code}/p2`);
+      quickMatchPollRef.on("value", (p2Snap) => {
+        if (!quickMatchQueueCode || code !== quickMatchQueueCode) return;
+        if (p2Snap.exists() && p2Snap.val()?.uid) {
+          const joinedCode = quickMatchQueueCode;
+          stopQuickMatchSearch(false);
+          attachToRoom(joinedCode, "p1");
+        }
+      });
+
+      // مهلة تلقائية 35 ثانية إذا لم ينضم أحد
+      quickMatchTimer = setTimeout(() => {
+        if (quickMatchQueueCode === code) {
+          stopQuickMatchSearch(true);
+          showToast("⌛ لم يتم العثور على خصم حالياً — جرّب إنشاء غرفة بكود");
+        }
+      }, 35000);
+    } catch (_) {
+      stopQuickMatchSearch(true);
+      showToast("⚠️ تعذر إتمام البحث التلقائي");
+    }
+  }
+
+  injectQuickMatchUi();
+  setTimeout(injectQuickMatchUi, 1200);
+
+  const origLeave = leaveCurrentRoom;
+  leaveCurrentRoom = function (removeFromDb = true) {
+    stopQuickMatchSearch(false);
+    origLeave(removeFromDb);
+  };
+})();
 
 })();
 
