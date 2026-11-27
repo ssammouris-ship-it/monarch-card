@@ -2639,8 +2639,9 @@ window.addEventListener("load", forceOfflineEnterApp);
 
 /* === حفظ جميع الشخصيات + التحديث التلقائي عند الدخول === */
 const CURSOR_KEY = "monarch_anilist_cursor_v1";
-const savedCursor = Number(localStorage.getItem(CURSOR_KEY));
-if (savedCursor > codexPageCursor) codexPageCursor = savedCursor;
+const savedCursor = Number(localStorage.getItem(CURSOR_KEY)) || 1;
+const minNextPage = Math.floor(characterCatalog.size / 50) + 1;
+codexPageCursor = Math.max(codexPageCursor, savedCursor, minNextPage);
 
 // 1. إعادة تعريف دالة الحفظ لتخزين كل الشخصيات بدون حد 360
 saveCharCache = function () {
