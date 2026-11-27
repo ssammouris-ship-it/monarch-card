@@ -3127,6 +3127,178 @@ finalizeOnlineMatchRewards = async function (room) {
     new MutationObserver(injectMythicPacks).observe(shopGrid, { childList: true });
   }
 })();
+/* === إصلاح الأخطاء الـ 4: الألغاز + مزامنة النوادر + ظهور البطاقات لـ P1 + التصنيف بالشعبية === */
+(function applyHotfixPhase1() {
+  /* 1. إصلاح التصنيف حسب الشعبية (favourites) ومنع تطابق الأسماء الجزئي */
+  const EXACT_VIP = {
+    "monkey d. luffy": "SP", "satoru gojo": "SP", "son goku": "SP", "guts": "SP",
+    "sung jin-woo": "SP", "ryomen sukuna": "SP", "sosuke aizen": "SP", "madara uchiha": "SP",
+    "naruto uzumaki": "UR", "sasuke uchiha": "UR", "itachi uchiha": "UR", "roronoa zoro": "UR",
+    "levi": "UR", "levi ackerman": "UR", "eren yeager": "UR", "ichigo kurosaki": "UR",
+    "light yagami": "UR", "l lawliet": "UR", "lelouch lamperouge": "UR", "saitama": "UR",
+    "kisuke urahara": "UR", "ryuk": "UR", "killua zoldyck": "UR", "hisoka morow": "UR",
+    "sebastian michaelis": "SSR", "roy mustang": "SSR", "edward elric": "SSR",
+    "ken kaneki": "SSR", "vegeta": "SSR"
+  };
+
+  function calcRarityByPopularity(char) {
+    const exactKey = (char.name || "").trim().toLowerCase();
+    if (EXACT_VIP[exactKey]) return EXACT_VIP[exactKey];
+    const fav = Number(char.favourites ?? char.favorites ?? char.popularity ?? 0);
+    if (fav >= 45000) return "SP";
+    if (fav >= 20000) return "UR";
+    if (fav >= 10000) return "SSR";
+    if (fav >= 4000) return "SR";
+    if (fav >= 1500) return "R";
+    if (fav >= 500) return "C";
+    return "N";
+  }
+
+  function fixAllCatalogRarities() {
+    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
+    characterCatalog.forEach((char) => {
+      char.rarity = calcRarityByPopularity(char);
+    });
+  }
+  fixAllCatalogRarities();
+  setInterval(fixAllCatalogRarities, 6000);
+
+  /* 2. مزامنة بطاقاتك النادرة (SSR / UR / SP) مع Firebase لتظهر في سجل النوادر عند الجميع */
+  async function syncMyLimitedCardsToFirebase() {
+    if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
+    const LIMITS = { SP: 1, UR: 3, SSR: 10 };
+    let updatedLocal = false;
+
+    for (const card of state.inventory) {
+      const maxSlots = LIMITS[card.rarity];
+      const cid = card.charId || card.id;
+      if (!maxSlots || !cid) continue;
+
+      try {
+        const ref = db.ref(`limitedCards/${cid}`);
+        const snap = await ref.get();
+        const owners = snap.val() || {};
+        const alreadyOwned = Object.values(owners).some((o) => o && o.uid === state.uid);
+        if (alreadyOwned) continue;
+
+        for (let s = 1; s <= maxSlots; s++) {
+          if (!owners[s]) {
+            await db.ref(`limitedCards/${cid}/${s}`).set({
+              uid: state.uid,
+              name: state.name,
+              claimedAt: card.acquiredAt || Date.now()
+            });
+            card.serial = s;
+            updatedLocal = true;
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+    if (updatedLocal) saveState();
+  }
+  setTimeout(syncMyLimitedCardsToFirebase, 3500);
+  setInterval(syncMyLimitedCardsToFirebase, 25000);
+
+  /* 3. إصلاح زر حذف إجابة في الألغاز لمنع حذف الجواب الصحيح نهائياً */
+  const HINT_COSTS = [50, 100, 150];
+  let hintCount = 0;
+
+  function findCorrectAnswerName() {
+    const imgEl = document.getElementById("triviaImg");
+    const imgSrc = imgEl?.getAttribute("src") || imgEl?.src || "";
+    if (imgSrc && typeof characterCatalog !== "undefined") {
+      for (const char of characterCatalog.values()) {
+        if (char.image && (char.image === imgSrc || imgSrc.endsWith(char.image))) {
+          return char.name;
+        }
+      }
+    }
+    return "";
+  }
+
+  const oldBtn = document.getElementById("btnTrivia5050");
+  if (oldBtn) {
+    const safeBtn = oldBtn.cloneNode(true);
+    oldBtn.replaceWith(safeBtn);
+
+    const refreshBtn = () => {
+      if (hintCount >= HINT_COSTS.length) {
+        safeBtn.disabled = true;
+        safeBtn.textContent = "✂️ تم حذف كل الأخطاء";
+      } else {
+        safeBtn.disabled = false;
+        safeBtn.textContent = `✂️ حذف إجابة (${HINT_COSTS[hintCount]} 🪙)`;
+      }
+    };
+    refreshBtn();
+
+    const optBox = document.getElementById("triviaOptions");
+    if (optBox) {
+      new MutationObserver(() => {
+        hintCount = 0;
+        refreshBtn();
+      }).observe(optBox, { childList: true });
+    }
+
+    safeBtn.addEventListener("click", () => {
+      if (hintCount >= HINT_COSTS.length) return;
+      const cost = HINT_COSTS[hintCount];
+      if (state.gold < cost) return showToast(`⚠️ تحتاج ${cost} ذهب لحذف إجابة`);
+
+      const correctName = findCorrectAnswerName().trim().toLowerCase();
+      const activeBtns = Array.from(document.querySelectorAll("#triviaOptions button"))
+        .filter((b) => !b.disabled && b.style.opacity !== "0.25");
+
+      if (activeBtns.length <= 1) return;
+
+      const wrongBtns = activeBtns.filter((b) => {
+        const txt = b.textContent.trim().toLowerCase();
+        if (b.dataset.correct === "true" || b.dataset.isCorrect === "1") return false;
+        if (correctName && txt === correctName) return false;
+        return true;
+      });
+
+      // حماية: إذا لم نتمكن من تحديد الصحيح بيقين (أو بقي الصحيح فقط) لا نحذف شيئاً
+      if (!correctName || wrongBtns.length === 0 || wrongBtns.length === activeBtns.length) {
+        return showToast("⚠️ لا يمكن استخدام الحذف في هذا السؤال");
+      }
+
+      const victim = wrongBtns[Math.floor(Math.random() * wrongBtns.length)];
+      victim.disabled = true;
+      victim.style.opacity = "0.25";
+      victim.style.textDecoration = "line-through";
+
+      state.gold -= cost;
+      hintCount++;
+      saveState();
+      updateHud();
+      playSfx("click");
+      refreshBtn();
+    });
+  }
+
+  /* 4. إصلاح عدم ظهور البطاقات لمنشئ الغرفة (p1) عند بدء النزال أونلاين */
+  const _prevRenderRoom = renderOnlineRoomState;
+  renderOnlineRoomState = function (room) {
+    if (!room) return;
+    if (room.status === "waiting" || room.status === "consent") {
+      onlinePreviewStartedFor = null;
+    }
+    if (room.status === "preview") {
+      document.getElementById("mutualConsentBar")?.classList.add("hidden");
+      if (onlinePreviewStartedFor !== room.code) {
+        startOnlineVisibleShuffle(room);
+        // تأكيد إضافي لظهور البطاقات مكشوفة لمنشئ الغرفة (p1)
+        setTimeout(() => {
+          if (room.status === "preview") renderOnlineBoard(room, true);
+        }, 150);
+      }
+      return;
+    }
+    _prevRenderRoom(room);
+  };
+})();
 
 })();
 function forceOfflineEnterApp() {
