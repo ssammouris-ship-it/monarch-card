@@ -391,16 +391,6 @@
   </div>
 <script>
   if (typeof firebase === "undefined") {
-    window.firebase = {
-      apps: [],
-      initializeApp: function () {},
-      database: function () { return null; },
-      analytics: function () { return null; }
-    };
-  }
-</script>
-  <script>
-  if (typeof firebase === "undefined") {
     const fakeRef = {
       on: function () {},
       off: function () {},
