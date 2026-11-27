@@ -405,11 +405,24 @@
   }
 
   function saveCharCache() {
+  try {
+    const arr = Array.from(characterCatalog.values());
+    localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(arr));
+    localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
+  } catch (_) {
     try {
-      const arr = Array.from(characterCatalog.values()).slice(0, 360);
-      localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(arr));
-    } catch (_) {}
+      const compact = Array.from(characterCatalog.values()).map((c) => ({
+        ...c,
+        bioEn: c.bioEn ? c.bioEn.slice(0, 120) : ""
+      }));
+      localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(compact));
+      localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
+    } catch (__) {}
   }
+  const el = document.getElementById("settingsCatalogCount");
+  if (el) el.textContent = characterCatalog.size;
+}
+
   /* =========================================================
      6. جلب الشخصيات من AniList وتنظيف البيانات
   ========================================================= */
@@ -2703,7 +2716,4 @@ async function autoExpandCatalogOnStart(pagesToFetch = 3) {
     }
   }
 }
-
-window.addEventListener("load", () => {
-  setTimeout(() => autoExpandCatalogOnStart(3), 2500);
-});
+setTimeout(() => autoExpandCatalogOnStart(3), 1500);
