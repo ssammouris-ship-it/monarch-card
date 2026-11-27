@@ -3127,43 +3127,100 @@ finalizeOnlineMatchRewards = async function (room) {
     new MutationObserver(injectMythicPacks).observe(shopGrid, { childList: true });
   }
 })();
-/* === إصلاح الأخطاء الـ 4: الألغاز + مزامنة النوادر + ظهور البطاقات لـ P1 + التصنيف بالشعبية === */
-(function applyHotfixPhase1() {
-  /* 1. إصلاح التصنيف حسب الشعبية (favourites) ومنع تطابق الأسماء الجزئي */
+  /* === الإصلاح الشامل: تصنيف فوري متطابق + أسماء AniList + مزامنة النوادر + الألغاز + P1 === */
+(function applyHotfixPhase1V2() {
+  /* 1. قائمة VIP مطابقة لأسماء AniList الحقيقية والأسماء الشائعة */
   const EXACT_VIP = {
-    "monkey d. luffy": "SP", "satoru gojo": "SP", "son goku": "SP", "guts": "SP",
-    "sung jin-woo": "SP", "ryomen sukuna": "SP", "sosuke aizen": "SP", "madara uchiha": "SP",
-    "naruto uzumaki": "UR", "sasuke uchiha": "UR", "itachi uchiha": "UR", "roronoa zoro": "UR",
-    "levi": "UR", "levi ackerman": "UR", "eren yeager": "UR", "ichigo kurosaki": "UR",
-    "light yagami": "UR", "l lawliet": "UR", "lelouch lamperouge": "UR", "saitama": "UR",
-    "kisuke urahara": "UR", "ryuk": "UR", "killua zoldyck": "UR", "hisoka morow": "UR",
+    // SP (الأساطير)
+    "monkey d. luffy": "SP", "luffy monkey": "SP",
+    "satoru gojo": "SP", "satoru gojou": "SP",
+    "son goku": "SP", "goku son": "SP",
+    "guts": "SP",
+    "sung jin-woo": "SP", "jin-u seong": "SP", "jinwoo sung": "SP",
+    "ryomen sukuna": "SP", "sukuna": "SP",
+    "sosuke aizen": "SP", "sousuke aizen": "SP",
+    "madara uchiha": "SP", "uchiha madara": "SP",
+    "levi": "SP", "levi ackerman": "SP",
+    "lelouch lamperouge": "SP", "shigeo kageyama": "SP",
+
+    // UR (نادر جداً)
+    "naruto uzumaki": "UR", "sasuke uchiha": "UR", "itachi uchiha": "UR",
+    "roronoa zoro": "UR", "zoro roronoa": "UR",
+    "eren yeager": "UR", "eren jaeger": "UR",
+    "ichigo kurosaki": "UR", "light yagami": "UR", "l lawliet": "UR",
+    "saitama": "UR", "kisuke urahara": "UR", "ryuk": "UR",
+    "killua zoldyck": "UR", "hisoka morow": "UR", "vegeta": "UR",
+    "sanji": "UR", "tanjirou kamado": "UR", "tanjiro kamado": "UR",
+
+    // SSR (ممتاز)
     "sebastian michaelis": "SSR", "roy mustang": "SSR", "edward elric": "SSR",
-    "ken kaneki": "SSR", "vegeta": "SSR"
+    "ken kaneki": "SSR", "robin nico": "SSR", "nico robin": "SSR",
+    "senkuu ishigami": "SSR", "manjirou sano": "SSR", "megumi fushiguro": "SSR",
+    "kusuo saiki": "SSR", "nami": "SSR", "koro-sensei": "SSR"
   };
 
-  function calcRarityByPopularity(char) {
+  function calcRarityFinal(char) {
+    if (!char) return "N";
     const exactKey = (char.name || "").trim().toLowerCase();
     if (EXACT_VIP[exactKey]) return EXACT_VIP[exactKey];
     const fav = Number(char.favourites ?? char.favorites ?? char.popularity ?? 0);
-    if (fav >= 45000) return "SP";
-    if (fav >= 20000) return "UR";
-    if (fav >= 10000) return "SSR";
-    if (fav >= 4000) return "SR";
-    if (fav >= 1500) return "R";
-    if (fav >= 500) return "C";
+    if (fav >= 30000) return "SP";
+    if (fav >= 15000) return "UR";
+    if (fav >= 7000) return "SSR";
+    if (fav >= 3000) return "SR";
+    if (fav >= 1000) return "R";
+    if (fav >= 300) return "C";
     return "N";
   }
 
-  function fixAllCatalogRarities() {
-    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
-    characterCatalog.forEach((char) => {
-      char.rarity = calcRarityByPopularity(char);
-    });
+  // اعتراض إضافة أي شخصية جديدة (حتى مع Load More) وتصنيفها فوراً قبل العرض
+  if (typeof characterCatalog !== "undefined" && characterCatalog instanceof Map) {
+    const _origMapSet = characterCatalog.set.bind(characterCatalog);
+    characterCatalog.set = function (key, char) {
+      if (char && typeof char === "object") {
+        char.rarity = calcRarityFinal(char);
+      }
+      return _origMapSet(key, char);
+    };
   }
-  fixAllCatalogRarities();
-  setInterval(fixAllCatalogRarities, 6000);
 
-  /* 2. مزامنة بطاقاتك النادرة (SSR / UR / SP) مع Firebase لتظهر في سجل النوادر عند الجميع */
+  function fixAllCatalogAndRefreshCodex() {
+    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
+    let changed = false;
+    characterCatalog.forEach((char) => {
+      const r = calcRarityFinal(char);
+      if (char.rarity !== r) {
+        char.rarity = r;
+        changed = true;
+      }
+    });
+    if (Array.isArray(state.inventory)) {
+      let invChanged = false;
+      state.inventory.forEach((card) => {
+        const key = (card.name || "").trim().toLowerCase();
+        if (EXACT_VIP[key] && card.rarity !== EXACT_VIP[key]) {
+          card.rarity = EXACT_VIP[key];
+          invChanged = true;
+        }
+      });
+      if (invChanged) saveState();
+    }
+    if (changed) {
+      if (typeof renderCodex === "function") renderCodex();
+      else if (typeof renderRareCodex === "function") renderRareCodex();
+    }
+  }
+
+  fixAllCatalogAndRefreshCodex();
+  setTimeout(fixAllCatalogAndRefreshCodex, 1500);
+  setTimeout(fixAllCatalogAndRefreshCodex, 4000);
+
+  // إعادة فحص التصنيف كلما فتح اللاعب تبويب النوادر
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setTimeout(fixAllCatalogAndRefreshCodex, 150));
+  });
+
+  /* 2. مزامنة بطاقاتك النادرة (SSR / UR / SP) مع Firebase لتظهر عند الجميع */
   async function syncMyLimitedCardsToFirebase() {
     if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
     const LIMITS = { SP: 1, UR: 3, SSR: 10 };
@@ -3178,8 +3235,7 @@ finalizeOnlineMatchRewards = async function (room) {
         const ref = db.ref(`limitedCards/${cid}`);
         const snap = await ref.get();
         const owners = snap.val() || {};
-        const alreadyOwned = Object.values(owners).some((o) => o && o.uid === state.uid);
-        if (alreadyOwned) continue;
+        if (Object.values(owners).some((o) => o && o.uid === state.uid)) continue;
 
         for (let s = 1; s <= maxSlots; s++) {
           if (!owners[s]) {
@@ -3259,7 +3315,6 @@ finalizeOnlineMatchRewards = async function (room) {
         return true;
       });
 
-      // حماية: إذا لم نتمكن من تحديد الصحيح بيقين (أو بقي الصحيح فقط) لا نحذف شيئاً
       if (!correctName || wrongBtns.length === 0 || wrongBtns.length === activeBtns.length) {
         return showToast("⚠️ لا يمكن استخدام الحذف في هذا السؤال");
       }
@@ -3289,7 +3344,6 @@ finalizeOnlineMatchRewards = async function (room) {
       document.getElementById("mutualConsentBar")?.classList.add("hidden");
       if (onlinePreviewStartedFor !== room.code) {
         startOnlineVisibleShuffle(room);
-        // تأكيد إضافي لظهور البطاقات مكشوفة لمنشئ الغرفة (p1)
         setTimeout(() => {
           if (room.status === "preview") renderOnlineBoard(room, true);
         }, 150);
@@ -3299,6 +3353,7 @@ finalizeOnlineMatchRewards = async function (room) {
     _prevRenderRoom(room);
   };
 })();
+
 
 })();
 function forceOfflineEnterApp() {
