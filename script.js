@@ -3354,6 +3354,128 @@ finalizeOnlineMatchRewards = async function (room) {
   };
 })();
 
+/* === إصلاح نهائي لمشكلة الملاك (المزامنة الموحدة) + إصلاح Guts (Kill la Kill) === */
+(function applyOwnersAndGutsFix() {
+  const LIMITS = { SP: 1, UR: 3, SSR: 10 };
+  window.__unifiedOwners = {};
+
+  /* 1. منع تصنيف Guts من Kill la Kill كـ SP (فقط Guts من Berserk يأخذ SP) */
+  function fixGutsAndWrongSP() {
+    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
+    characterCatalog.forEach((char) => {
+      const name = (char.name || "").trim().toLowerCase();
+      const anime = (char.anime || char.media || "").toLowerCase();
+      if (name === "guts" && !anime.includes("berserk")) {
+        char.rarity = "N";
+      }
+    });
+  }
+  fixGutsAndWrongSP();
+  setInterval(fixGutsAndWrongSP, 5000);
+
+  /* 2. مزامنة موحدة ونظيفة للملاك في Firebase (مسار واحد للجميع بدون تكرار) */
+  async function syncCleanOwners() {
+    if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
+
+    const myRareByChar = new Map();
+    for (const card of state.inventory) {
+      const cid = String(card.charId || card.id || "");
+      if (!cid || !LIMITS[card.rarity]) continue;
+      if (!myRareByChar.has(cid)) myRareByChar.set(cid, card);
+    }
+
+    for (const [cid, card] of myRareByChar.entries()) {
+      try {
+        // تسجيل المالك في المسار الموحد بمفتاح uid (يمنع التكرار نهائياً)
+        await db.ref(`rareOwners/${cid}/${state.uid}`).set({
+          uid: state.uid,
+          name: state.name || "Player",
+          rarity: card.rarity,
+          updatedAt: Date.now()
+        });
+
+        // تنظيف أي تكرار قديم في المسار القديم limitedCards حتى لا يظهر 0/10 أو 5/10 خطأً
+        const oldSnap = await db.ref(`limitedCards/${cid}`).get();
+        if (oldSnap.exists()) {
+          const oldData = oldSnap.val() || {};
+          let foundMySlot = false;
+          for (const [slot, info] of Object.entries(oldData)) {
+            if (info && info.uid === state.uid) {
+              if (foundMySlot) {
+                await db.ref(`limitedCards/${cid}/${slot}`).remove();
+              } else {
+                foundMySlot = true;
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  /* 3. الاستماع المباشر للملاك من Firebase وتحديث نافذة البطاقة للجميع */
+  if (db) {
+    db.ref("rareOwners").on("value", (snap) => {
+      window.__unifiedOwners = snap.val() || {};
+    });
+    setTimeout(syncCleanOwners, 2500);
+    setInterval(syncCleanOwners, 30000);
+  }
+
+  /* 4. حقن قائمة الملاك الحقيقيين داخل نافذة تفاصيل البطاقة عند فتحها */
+  function patchOpenedModalOwners() {
+    const modal = document.querySelector(".modal:not(.hidden), #codexModal:not(.hidden), #dossierModal:not(.hidden)");
+    if (!modal) return;
+
+    const titleEl = modal.querySelector("h2, h3, .modal-title, #dossierName");
+    const charName = (titleEl?.textContent || "").trim().toLowerCase();
+    if (!charName || typeof characterCatalog === "undefined") return;
+
+    let matchedChar = null;
+    for (const c of characterCatalog.values()) {
+      if ((c.name || "").trim().toLowerCase() === charName) {
+        matchedChar = c;
+        break;
+      }
+    }
+    if (!matchedChar || !LIMITS[matchedChar.rarity]) return;
+
+    const cid = String(matchedChar.id);
+    const maxSlots = LIMITS[matchedChar.rarity];
+    const ownersObj = window.__unifiedOwners[cid] || {};
+    const ownersList = Object.values(ownersObj).slice(0, maxSlots);
+    const remaining = Math.max(0, maxSlots - ownersList.length);
+
+    let box = modal.querySelector("#unifiedOwnersBox");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "unifiedOwnersBox";
+      box.style.cssText = "margin-top:12px; padding:10px; border-radius:12px; background:#0f172a; border:1px solid #334155;";
+      const content = modal.querySelector(".modal-content, .modal-body") || modal;
+      content.appendChild(box);
+    }
+
+    const rowsHtml = ownersList.length
+      ? ownersList.map((o, idx) => {
+          const isMe = o.uid === state.uid;
+          return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; margin-top:6px; border-radius:8px; background:#1e293b; color:#fff; font-size:13px;">
+            <span>👑 #${idx + 1}/${maxSlots} ${o.name}</span>
+            ${isMe ? '<span style="color:#fbbf24; font-weight:bold;">أنت</span>' : '<span style="color:#38bdf8;">مالك</span>'}
+          </div>`;
+        }).join("")
+      : `<div style="color:#94a3b8; font-size:13px; margin-top:6px;">لا يوجد ملاك بعد — متاح بالكامل في المتجر</div>`;
+
+    box.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:bold; color:#e2e8f0;">
+        <span>👑 الملاك الموثقون (مباشر)</span>
+        <span style="color:#34d399;">متبقي: ${remaining}/${maxSlots}</span>
+      </div>
+      ${rowsHtml}
+    `;
+  }
+
+  setInterval(patchOpenedModalOwners, 600);
+})();
 
 })();
 function forceOfflineEnterApp() {
