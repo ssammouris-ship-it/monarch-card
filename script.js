@@ -2616,6 +2616,212 @@
       arenaPane.querySelector(".panel-card")?.prepend(tip);
     }
   })();
+  /* === إضافة رهان الذهب + خيارات الجواهر (30/100/1000) + الخلط المرئي لدقيقة === */
+let selectedGemsStake = 30;
+let activeShuffleInterval = null;
+
+window.selectGemsStake = function (val, btn) {
+  selectedGemsStake = val;
+  document.querySelectorAll("[data-gem-stake]").forEach((b) => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+};
+
+// إظهار وإخفاء صناديق الذهب والجواهر عند تغيير نوع النزال
+document.querySelectorAll(".duel-mode-card").forEach((card) => {
+  card.addEventListener("click", () => {
+    setTimeout(() => {
+      document.getElementById("safeGoldStakeBox")?.classList.toggle("hidden", selectedDuelMode !== "safe");
+      document.getElementById("gemsStakeBox")?.classList.toggle("hidden", selectedDuelMode !== "stake_gems");
+    }, 10);
+  });
+});
+
+// دالة الخلط المرئي لمدة دقيقة كاملة (60 ثانية)
+function startOnlineVisibleShuffle(room) {
+  if (onlinePreviewStartedFor === room.code) return;
+  onlinePreviewStartedFor = room.code;
+  if (activeShuffleInterval) clearInterval(activeShuffleInterval);
+
+  const statusBanner = document.getElementById("onlineDuelStatus");
+  renderOnlineBoard(room, true);
+  if (statusBanner) statusBanner.textContent = "👀 احفظ أماكن البطاقات! سيبدأ الخلط خلال 4 ثوانٍ...";
+
+  setTimeout(() => {
+    renderOnlineBoard(room, false);
+    let secondsLeft = 60;
+    let cardsOrder = [...(room.cards || [])];
+    let seed = Number(room.code) || 1234;
+    const nextRand = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+
+    const doVisualSwap = () => {
+      const board = document.getElementById("onlineBoard");
+      if (!board || board.children.length < 6) return;
+      const i = Math.floor(nextRand() * 6);
+      let j = Math.floor(nextRand() * 6);
+      if (i === j) j = (i + 1) % 6;
+
+      [cardsOrder[i], cardsOrder[j]] = [cardsOrder[j], cardsOrder[i]];
+
+      const elA = board.children[i];
+      const elB = board.children[j];
+      const rectA = elA.getBoundingClientRect();
+      const rectB = elB.getBoundingClientRect();
+      const dx = rectB.left - rectA.left;
+      const dy = rectB.top - rectA.top;
+
+      elA.style.transition = "transform 0.35s ease";
+      elB.style.transition = "transform 0.35s ease";
+      elA.style.transform = `translate(${dx}px, ${dy}px)`;
+      elB.style.transform = `translate(${-dx}px, ${-dy}px)`;
+
+      setTimeout(() => {
+        elA.style.transition = "none";
+        elB.style.transition = "none";
+        elA.style.transform = "";
+        elB.style.transform = "";
+      }, 360);
+    };
+
+    if (statusBanner) statusBanner.textContent = `🌀 جاري خلط البطاقات... متبقي ${secondsLeft} ثانية`;
+    let tick = 0;
+    activeShuffleInterval = setInterval(async () => {
+      tick++;
+      doVisualSwap();
+      if (tick % 2 === 0) {
+        secondsLeft--;
+        if (statusBanner) statusBanner.textContent = `🌀 جاري خلط البطاقات... متبقي ${secondsLeft} ثانية`;
+      }
+      if (secondsLeft <= 0) {
+        clearInterval(activeShuffleInterval);
+        activeShuffleInterval = null;
+        if (currentRole === "p1") {
+          await db.ref(`duels/${room.code}`).update({ cards: cardsOrder, status: "playing" });
+        }
+      }
+    }, 500);
+  }, 4000);
+}
+
+// تحديث إنشاء الغرفة والدخول إليها
+const _newCreateRoom = async function () {
+  if (!db || !navigator.onLine) return showToast("⚠️ لا يوجد اتصال بالإنترنت");
+  if (characterCatalog.size < 6) {
+    await ensureRichCatalog();
+    if (characterCatalog.size < 6) return showToast("⚠️ جاري تحميل الشخصيات...");
+  }
+  const duelType = selectedDuelMode;
+  const goldStake = duelType === "safe" ? Math.max(0, Math.floor(Number(document.getElementById("inputGoldStake")?.value) || 0)) : 0;
+  const gemsStake = duelType === "stake_gems" ? selectedGemsStake : 0;
+  let stakeCard = null;
+
+  if (duelType === "safe" && goldStake > 0 && state.gold < goldStake) return showToast(`⚠️ لا تملك ${goldStake} ذهب للرهان`);
+  if (duelType === "stake_gems" && state.gems < gemsStake) return showToast(`⚠️ لا تملك ${gemsStake} جوهرة للرهان`);
+  if (duelType === "stake_card") {
+    stakeCard = state.inventory.find((c) => c.uidCard === selectedStakeCardUid);
+    if (!stakeCard) return showToast(t("msg_no_rares_to_stake"));
+  }
+
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  const boardCards = pickSixUniqueRarityCards().map((c) => ({ id: c.id, name: c.name, image: c.image, rarity: c.rarity }));
+  await db.ref(`duels/${code}`).set({
+    code, duelType, goldStake, gemsStake, status: "waiting", turn: "p1",
+    cards: boardCards, picked: ["", "", "", "", "", ""],
+    p1: { uid: state.uid, name: state.name, consent: false, stakeCard },
+    p2: null, createdAt: Date.now()
+  });
+  attachToRoom(code, "p1");
+  showToast(`✅ ${t("lbl_room_code")}: ${code}`);
+};
+
+const _newJoinRoom = async function () {
+  const code = (document.getElementById("inputRoomCode")?.value || "").trim();
+  if (!/^\d{4}$/.test(code)) return showToast("⚠️ أدخل كود من 4 أرقام");
+  if (!db || !navigator.onLine) return showToast("⚠️ لا يوجد اتصال بالإنترنت");
+  const snap = await db.ref(`duels/${code}`).get();
+  if (!snap.exists()) return showToast("❌ الغرفة غير موجودة");
+  const room = snap.val();
+  if (room.p1?.uid === state.uid) { attachToRoom(code, "p1"); return; }
+  if (room.p2 && room.p2.uid !== state.uid) return showToast("⚠️ الغرفة ممتلئة");
+
+  const reqGold = Number(room.goldStake) || 0;
+  const reqGems = Number(room.gemsStake) || 30;
+  let p2StakeCard = null;
+
+  if (room.duelType === "safe" && reqGold > 0 && state.gold < reqGold) return showToast(`⚠️ تتطلب الغرفة ${reqGold} ذهب`);
+  if (room.duelType === "stake_gems" && state.gems < reqGems) return showToast(`⚠️ تتطلب الغرفة ${reqGems} جوهرة`);
+  if (room.duelType === "stake_card") {
+    const reqRarity = room.p1?.stakeCard?.rarity;
+    p2StakeCard = state.inventory.find((c) => c.rarity === reqRarity);
+    if (!p2StakeCard) return showToast(`⚠️ تتطلب بطاقة ندرة ${reqRarity}`);
+  }
+
+  const nextStatus = (room.duelType !== "safe" || reqGold > 0) ? "consent" : "preview";
+  await db.ref(`duels/${code}`).update({
+    status: nextStatus,
+    p2: { uid: state.uid, name: state.name, consent: false, stakeCard: p2StakeCard }
+  });
+  attachToRoom(code, "p2");
+};
+
+// ربط أزرار الإنشاء والدخول بالدوال الجديدة
+const _btnCreate = document.getElementById("btnCreateRoom");
+if (_btnCreate) {
+  const _cClone = _btnCreate.cloneNode(true);
+  _btnCreate.replaceWith(_cClone);
+  _cClone.addEventListener("click", _newCreateRoom);
+}
+const _btnJoin = document.getElementById("btnJoinRoom");
+if (_btnJoin) {
+  const _jClone = _btnJoin.cloneNode(true);
+  _btnJoin.replaceWith(_jClone);
+  _jClone.addEventListener("click", _newJoinRoom);
+}
+
+// ربط عرض الغرفة بالخلط المرئي وعرض الرهان
+const _origRenderRoom = renderOnlineRoomState;
+renderOnlineRoomState = function (room) {
+  if (room.status === "preview") {
+    document.getElementById("mutualConsentBar")?.classList.add("hidden");
+    startOnlineVisibleShuffle(room);
+    return;
+  }
+  _origRenderRoom(room);
+  const stakeText = room.duelType === "stake_gems"
+    ? `${room.gemsStake || 30} 💎`
+    : (room.duelType === "safe" && room.goldStake > 0 ? `${room.goldStake} 🪙` : "✓");
+  const p1Lbl = document.getElementById("p1StakeLabel");
+  const p2Lbl = document.getElementById("p2StakeLabel");
+  if (p1Lbl && room.duelType !== "stake_card") p1Lbl.textContent = stakeText;
+  if (p2Lbl && room.p2 && room.duelType !== "stake_card") p2Lbl.textContent = stakeText;
+};
+
+// تحديث توزيع جوائز الذهب والجواهر الإضافية
+const _origFinalize = finalizeOnlineMatchRewards;
+finalizeOnlineMatchRewards = async function (room) {
+  if (rewardedRooms.has(room.code)) return;
+  await _origFinalize(room);
+  const picked = room.picked || [];
+  let p1Score = 0, p2Score = 0;
+  (room.cards || []).forEach((c, i) => {
+    const p = RANK_POWER[c.rarity] || 1;
+    if (picked[i] === "p1") p1Score += p;
+    else if (picked[i] === "p2") p2Score += p;
+  });
+  const iWon = (p1Score >= p2Score ? "p1" : "p2") === currentRole;
+  if (room.duelType === "safe" && Number(room.goldStake) > 0) {
+    const g = Number(room.goldStake);
+    state.gold = iWon ? state.gold + g : Math.max(0, state.gold - g);
+  } else if (room.duelType === "stake_gems") {
+    const extra = (Number(room.gemsStake) || 30) - 30;
+    if (extra > 0) state.gems = iWon ? state.gems + extra : Math.max(0, state.gems - extra);
+  }
+  saveState();
+  updateHud();
+};
+
 })();
 function forceOfflineEnterApp() {
   const btnStart = document.getElementById("btnStartGame");
