@@ -179,6 +179,27 @@
             </div>
 
             <!-- منتقي بطاقة الرهان المرئي الداكن -->
+            <!-- رهان الذهب في النزال الآمن -->
+<div id="safeGoldStakeBox" class="stake-picker-panel" style="margin-bottom:10px;">
+  <label class="field-label">🪙 رهان الذهب (اختياري - اكتب 0 للعب بدون رهان):</label>
+  <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+    <input id="inputGoldStake" type="number" min="0" step="50" value="0" style="flex:1; padding:8px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#fff; font-weight:bold;" />
+    <button type="button" class="secondary-btn" onclick="document.getElementById('inputGoldStake').value=0">0</button>
+    <button type="button" class="secondary-btn" onclick="document.getElementById('inputGoldStake').value=200">200</button>
+    <button type="button" class="secondary-btn" onclick="document.getElementById('inputGoldStake').value=1000">1000</button>
+  </div>
+</div>
+
+<!-- رهان الجواهر (30 / 100 / 1000) -->
+<div id="gemsStakeBox" class="stake-picker-panel hidden" style="margin-bottom:10px;">
+  <label class="field-label">💎 اختر قيمة رهان الجواهر:</label>
+  <div style="display:flex; gap:8px; margin-top:6px;">
+    <button type="button" class="diff-btn active" data-gem-stake="30" onclick="selectGemsStake(30, this)">30 💎</button>
+    <button type="button" class="diff-btn" data-gem-stake="100" onclick="selectGemsStake(100, this)">100 💎</button>
+    <button type="button" class="diff-btn" data-gem-stake="1000" onclick="selectGemsStake(1000, this)">1000 💎</button>
+  </div>
+</div>
+
             <div id="myStakeCardPicker" class="stake-picker-panel hidden">
               <label class="field-label" data-i18n="lbl_pick_stake">اضغط على بطاقتك النادرة للرهان:</label>
               <div id="myStakeCardsRow" class="stake-cards-strip"></div>
