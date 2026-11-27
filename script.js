@@ -2960,6 +2960,345 @@
     setTimeout(updateRedTicketPill, 1200);
   } catch (_) {}
 })();
+/* === نظام شراء عدة حزم دفعة واحدة + عرض جميع البطاقات جملة (4 لغات) === */
+(function enableBulkPackOpening() {
+  try {
+    const RARITY_ORDER = { SP: 7, UR: 6, SSR: 5, SR: 4, R: 3, C: 2, N: 1 };
+    const RARITY_COLORS = {
+      SP: "#ec4899",
+      UR: "#ef4444",
+      SSR: "#f59e0b",
+      SR: "#a855f7",
+      R: "#3b82f6",
+      C: "#22c55e",
+      N: "#94a3b8"
+    };
+
+    const B_I18N = {
+      ar: {
+        title: "🛒 شراء حزم بالجملة",
+        qty: "عدد الحزم:",
+        total: "التكلفة الإجمالية:",
+        buy: "شراء وفتح الكل ⚡",
+        cancel: "إلغاء",
+        results: "🎉 نتائج فتح الحزم",
+        pulled: "إجمالي البطاقات:",
+        ch_gained: "⚔️ بطاقات تحدي مكتسبة:",
+        no_funds: "⚠️ رصيدك غير كافٍ لشراء هذا العدد!",
+        close: "ممتاز ✓"
+      },
+      en: {
+        title: "🛒 Bulk Pack Purchase",
+        qty: "Pack Quantity:",
+        total: "Total Cost:",
+        buy: "Buy & Open All ⚡",
+        cancel: "Cancel",
+        results: "🎉 Pack Opening Results",
+        pulled: "Total Cards:",
+        ch_gained: "⚔️ Challenge Cards Gained:",
+        no_funds: "⚠️ Not enough balance for this quantity!",
+        close: "Awesome ✓"
+      },
+      fr: {
+        title: "🛒 Achat en Gros",
+        qty: "Quantité :",
+        total: "Coût Total :",
+        buy: "Acheter & Ouvrir ⚡",
+        cancel: "Annuler",
+        results: "🎉 Résultats d'ouverture",
+        pulled: "Cartes obtenues :",
+        ch_gained: "⚔️ Cartes de défi gagnées :",
+        no_funds: "⚠️ Solde insuffisant pour cette quantité !",
+        close: "Super ✓"
+      },
+      ja: {
+        title: "🛒 パックまとめ買い",
+        qty: "パック数:",
+        total: "合計コスト:",
+        buy: "購入して一括開封 ⚡",
+        cancel: "キャンセル",
+        results: "🎉 開封結果",
+        pulled: "獲得カード数:",
+        ch_gained: "⚔️ 獲得チャレンジカード:",
+        no_funds: "⚠️ 残高が不足しています！",
+        close: "OK ✓"
+      }
+    };
+
+    function getLang() {
+      const l = (typeof state !== "undefined" && state?.lang) || localStorage.getItem("lang") || "ar";
+      return B_I18N[l] ? l : "ar";
+    }
+    function bt(k) {
+      return (B_I18N[getLang()] && B_I18N[getLang()][k]) || B_I18N.ar[k] || k;
+    }
+
+    function fmtNum(n) {
+      const v = Number(n || 0);
+      if (v >= 1e12) return (v / 1e12).toFixed(1).replace(/\.0$/, "") + "T";
+      if (v >= 1e9) return (v / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+      if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+      if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+      return String(Math.floor(v));
+    }
+
+    function getInvKey() {
+      if (typeof state === "undefined" || !state) return null;
+      for (const k of ["inventory", "cards", "collection", "myCards", "ownedCards"]) {
+        if (Array.isArray(state[k])) return k;
+      }
+      return null;
+    }
+
+    function snapshotInventory() {
+      const key = getInvKey();
+      const map = new Map();
+      if (key && Array.isArray(state[key])) {
+        state[key].forEach((c) => {
+          if (!c) return;
+          const id = String(c.name || c.id || "").trim().toLowerCase();
+          const count = Math.max(1, Number(c.copies || c.count || 1));
+          map.set(id, (map.get(id) || 0) + count);
+        });
+      }
+      return map;
+    }
+
+    let isBulkRunning = false;
+
+    // اعتراض النقر على أزرار شراء الحزم في المتجر
+    document.addEventListener(
+      "click",
+      function (e) {
+        if (isBulkRunning) return;
+        const btn = e.target?.closest("button");
+        if (!btn) return;
+        if (btn.closest("#bulkPackModal, #bulkResultsModal")) return;
+
+        // التأكد أن الزر هو زر شراء حزمة داخل المتجر
+        const cardEl = btn.closest(".shop-item, .pack-card, .shop-card, [class*='pack'], [class*='shop']");
+        if (!cardEl) return;
+
+        const txt = (btn.textContent || "").trim();
+        const numMatch = txt.match(/(\d+)/);
+        if (!numMatch) return;
+
+        const isGold = /🪙|ذهب|gold/i.test(txt) || btn.className.includes("gold") || btn.style.background.includes("gold");
+        const isGem = /💎|جوهر|gem/i.test(txt) || btn.className.includes("gem") || btn.className.includes("blue");
+        if (!isGold && !isGem) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const unitPrice = Number(numMatch[1]);
+        const currency = isGem && !isGold ? "gems" : "gold";
+        const packTitle =
+          cardEl.querySelector("h3, h4, .pack-name, .pack-title")?.textContent?.trim() || bt("title");
+
+        openBulkSelectorModal(btn, packTitle, unitPrice, currency);
+      },
+      true
+    );
+
+    function openBulkSelectorModal(targetBtn, packTitle, unitPrice, currency) {
+      const old = document.getElementById("bulkPackModal");
+      if (old) old.remove();
+
+      let qty = 5;
+      const icon = currency === "gems" ? "💎" : "🪙";
+
+      const modal = document.createElement("div");
+      modal.id = "bulkPackModal";
+      modal.style.cssText =
+        "position:fixed;inset:0;z-index:10001;background:rgba(2,6,23,0.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;";
+
+      function renderModal() {
+        const total = unitPrice * qty;
+        modal.innerHTML = `
+          <div style="width:100%;max-width:360px;background:#0f172a;border:1px solid rgba(56,189,248,0.4);border-radius:18px;padding:18px;color:#f8fafc;box-shadow:0 20px 50px rgba(0,0,0,0.6);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <h3 style="margin:0;font-size:1rem;color:#38bdf8;">${packTitle}</h3>
+              <button id="btnBulkClose" type="button" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;">✕</button>
+            </div>
+
+            <div style="font-size:0.84rem;color:#cbd5e1;margin-bottom:8px;">${bt("qty")}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+              <button id="btnQtyMinus" type="button" style="width:42px;height:42px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:1.2rem;font-weight:800;cursor:pointer;">-</button>
+              <input id="bulkQtyInput" type="number" min="1" max="100" value="${qty}" style="flex:1;height:42px;text-align:center;border-radius:10px;border:1px solid #38bdf8;background:#020617;color:#fff;font-size:1.1rem;font-weight:800;" />
+              <button id="btnQtyPlus" type="button" style="width:42px;height:42px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:1.2rem;font-weight:800;cursor:pointer;">+</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px;">
+              ${[1, 5, 10, 25, 50]
+                .map(
+                  (n) => `<button type="button" data-q="${n}" style="padding:7px 4px;border-radius:8px;border:1px solid ${
+                    qty === n ? "#f59e0b" : "#334155"
+                  };background:${qty === n ? "rgba(245,158,11,0.22)" : "#1e293b"};color:#fff;font-weight:800;font-size:0.8rem;cursor:pointer;">×${n}</button>`
+                )
+                .join("")}
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;background:#1e293b;margin-bottom:14px;">
+              <span style="font-size:0.84rem;color:#cbd5e1;">${bt("total")}</span>
+              <span style="font-size:1rem;font-weight:900;color:#fbbf24;direction:ltr;">${fmtNum(total)} ${icon}</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+              <button id="btnBulkCancel" type="button" style="padding:11px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-weight:700;cursor:pointer;">${bt("cancel")}</button>
+              <button id="btnBulkConfirm" type="button" style="padding:11px;border-radius:12px;border:none;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;font-weight:800;cursor:pointer;">${bt("buy")}</button>
+            </div>
+          </div>
+        `;
+
+        modal.querySelector("#btnBulkClose")?.addEventListener("click", () => modal.remove());
+        modal.querySelector("#btnBulkCancel")?.addEventListener("click", () => modal.remove());
+        modal.querySelector("#btnQtyMinus")?.addEventListener("click", () => {
+          qty = Math.max(1, qty - 1);
+          renderModal();
+        });
+        modal.querySelector("#btnQtyPlus")?.addEventListener("click", () => {
+          qty = Math.min(100, qty + 1);
+          renderModal();
+        });
+        modal.querySelector("#bulkQtyInput")?.addEventListener("change", (ev) => {
+          qty = Math.max(1, Math.min(100, Number(ev.target.value) || 1));
+          renderModal();
+        });
+        modal.querySelectorAll("[data-q]").forEach((b) => {
+          b.addEventListener("click", () => {
+            qty = Number(b.dataset.q);
+            renderModal();
+          });
+        });
+
+        modal.querySelector("#btnBulkConfirm")?.addEventListener("click", () => {
+          const needed = unitPrice * qty;
+          const balance = currency === "gems" ? Number(state?.gems || 0) : Number(state?.gold || 0);
+          if (balance < needed) {
+            if (typeof showToast === "function") showToast(bt("no_funds"));
+            return;
+          }
+          modal.remove();
+          executeBulkPurchase(targetBtn, qty);
+        });
+      }
+
+      document.body.appendChild(modal);
+      renderModal();
+    }
+
+    function executeBulkPurchase(targetBtn, count) {
+      const beforeInv = snapshotInventory();
+      const beforeCh = {
+        SP: Number(state?.challengeCards?.SP || 0),
+        UR: Number(state?.challengeCards?.UR || 0),
+        SSR: Number(state?.challengeCards?.SSR || 0)
+      };
+
+      isBulkRunning = true;
+      try {
+        for (let i = 0; i < count; i++) {
+          targetBtn.click();
+        }
+      } finally {
+        isBulkRunning = false;
+      }
+
+      // إغلاق أي نافذة فتح فردية ظهرت أثناء الشراء
+      document.querySelectorAll(".modal, [id*='packModal'], [id*='PackModal'], [id*='revealModal']").forEach((m) => {
+        if (m.id !== "bulkResultsModal" && !m.classList.contains("hidden")) {
+          m.classList.add("hidden");
+        }
+      });
+
+      // حساب البطاقات الجديدة التي ظهرت
+      const key = getInvKey();
+      const pulledList = [];
+      if (key && Array.isArray(state[key])) {
+        state[key].forEach((c) => {
+          if (!c) return;
+          const id = String(c.name || c.id || "").trim().toLowerCase();
+          const nowCount = Math.max(1, Number(c.copies || c.count || 1));
+          const prevCount = beforeInv.get(id) || 0;
+          if (nowCount > prevCount) {
+            pulledList.push({ card: c, gained: nowCount - prevCount });
+          }
+        });
+      }
+
+      const chGained = {
+        SP: Math.max(0, Number(state?.challengeCards?.SP || 0) - beforeCh.SP),
+        UR: Math.max(0, Number(state?.challengeCards?.UR || 0) - beforeCh.UR),
+        SSR: Math.max(0, Number(state?.challengeCards?.SSR || 0) - beforeCh.SSR)
+      };
+
+      showBulkResultsModal(pulledList, chGained, count);
+    }
+
+    function showBulkResultsModal(pulledList, chGained, totalPacks) {
+      const old = document.getElementById("bulkResultsModal");
+      if (old) old.remove();
+
+      pulledList.sort((a, b) => (RARITY_ORDER[b.card.rarity] || 0) - (RARITY_ORDER[a.card.rarity] || 0));
+
+      const totalCh = chGained.SP + chGained.UR + chGained.SSR;
+      const chParts = [];
+      if (chGained.SP) chParts.push(`+${chGained.SP} SP`);
+      if (chGained.UR) chParts.push(`+${chGained.UR} UR`);
+      if (chGained.SSR) chParts.push(`+${chGained.SSR} SSR`);
+
+      const modal = document.createElement("div");
+      modal.id = "bulkResultsModal";
+      modal.style.cssText =
+        "position:fixed;inset:0;z-index:10002;background:rgba(2,6,23,0.9);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:14px;";
+
+      modal.innerHTML = `
+        <div style="width:100%;max-width:440px;max-height:85vh;display:flex;flex-direction:column;background:#0f172a;border:1px solid rgba(251,191,36,0.45);border-radius:18px;padding:16px;color:#fff;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h3 style="margin:0;font-size:1rem;color:#fbbf24;">${bt("results")} (×${totalPacks})</h3>
+            <button id="btnCloseBulkRes" type="button" style="background:none;border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;">✕</button>
+          </div>
+
+          ${
+            totalCh > 0
+              ? `<div style="padding:8px 10px;border-radius:10px;background:rgba(239,68,68,0.18);border:1px solid rgba(248,113,113,0.45);font-size:0.8rem;color:#fca5a5;margin-bottom:10px;text-align:center;">
+                  ${bt("ch_gained")} <b>${chParts.join(" | ")}</b>
+                </div>`
+              : ""
+          }
+
+          <div style="overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:4px 2px;flex:1;">
+            ${pulledList
+              .map(({ card, gained }) => {
+                const col = RARITY_COLORS[card.rarity] || "#94a3b8";
+                return `
+                  <div style="position:relative;border-radius:10px;overflow:hidden;border:1.5px solid ${col};background:#1e293b;">
+                    <span style="position:absolute;top:4px;right:4px;padding:2px 5px;border-radius:6px;background:${col};color:#fff;font-size:0.65rem;font-weight:900;">${card.rarity || "N"}</span>
+                    ${
+                      gained > 1
+                        ? `<span style="position:absolute;top:4px;left:4px;padding:2px 5px;border-radius:6px;background:rgba(0,0,0,0.75);color:#fbbf24;font-size:0.65rem;font-weight:800;">×${gained}</span>`
+                        : ""
+                    }
+                    <img src="${card.image || ""}" alt="${card.name || ""}" style="width:100%;height:96px;object-fit:cover;display:block;" />
+                    <div style="padding:4px;font-size:0.7rem;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${card.name || ""}</div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+
+          <button id="btnOkBulkRes" type="button" style="margin-top:12px;width:100%;padding:11px;border-radius:12px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-weight:800;font-size:0.9rem;cursor:pointer;">
+            ${bt("close")}
+          </button>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+      modal.querySelector("#btnCloseBulkRes")?.addEventListener("click", () => modal.remove());
+      modal.querySelector("#btnOkBulkRes")?.addEventListener("click", () => modal.remove());
+    }
+  } catch (_) {}
+})();
 
                
 
