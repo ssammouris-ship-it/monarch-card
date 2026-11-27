@@ -24,12 +24,12 @@
   }
 
   /* =========================================================
-     2. حقن تنسيقات إصلاح الإطار والمؤقت والتلميح تلقائياً
+     2. حقن تنسيقات الواجهة والحزم الخرافية
   ========================================================= */
   (function injectCoreFixStyles() {
-    if (document.getElementById("monarchV5Css")) return;
+    if (document.getElementById("monarchV6Css")) return;
     const st = document.createElement("style");
-    st.id = "monarchV5Css";
+    st.id = "monarchV6Css";
     st.textContent = `
       .panel-card { overflow: hidden; max-width: 100%; }
       .cards-board-6 { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 8px !important; width: 100% !important; max-width: 100% !important; overflow: hidden; padding: 2px; }
@@ -55,16 +55,28 @@
       .btn-cashout { background: linear-gradient(135deg, #22c55e, #15803d); color: #fff; border: none; border-radius: 12px; padding: 11px 10px; font-weight: 800; font-size: 0.82rem; cursor: pointer; }
       .btn-double { background: linear-gradient(135deg, #f43f5e, #f59e0b); color: #fff; border: none; border-radius: 12px; padding: 11px 10px; font-weight: 800; font-size: 0.82rem; cursor: pointer; }
       .clue-card-box { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; text-align: center; }
-      .clue-emblem { width: 64px; height: 64px; border-radius: 18px; background: rgba(245,197,66,0.14); border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 2rem; box-shadow: 0 0 18px rgba(245,197,66,0.25); }
+      .clue-emblem { width: 64px; height: 64px; border-radius: 18px; background: rgba(245,197,66,0.14); border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 2rem; }
       .clue-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
       .clue-tag { background: rgba(255,255,255,0.07); border: 1px solid rgba(245,197,66,0.35); color: var(--gold); padding: 4px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; }
       .codex-load-more { grid-column: 1 / -1; text-align: center; padding: 8px 0; }
+      .mythic-pack-card { position: relative; overflow: hidden; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; background: linear-gradient(145deg, #0f172a, #1e293b); transition: transform 0.2s ease; }
+      .mythic-pack-card:active { transform: scale(0.98); }
+      .pack-ssr { border: 2px solid #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.35); }
+      .pack-ur  { border: 2px solid #ef4444; box-shadow: 0 0 22px rgba(239, 68, 68, 0.45); }
+      .pack-sp  { border: 2px solid #a855f7; box-shadow: 0 0 26px rgba(168, 85, 247, 0.6); }
+      .mythic-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #fff; }
+      .pack-ssr .mythic-badge { background: linear-gradient(90deg, #d97706, #f59e0b); }
+      .pack-ur  .mythic-badge { background: linear-gradient(90deg, #dc2626, #f97316); }
+      .pack-sp  .mythic-badge { background: linear-gradient(90deg, #7e22ce, #ec4899); }
+      #mythicOpenOverlay { position: fixed; inset: 0; z-index: 99999; background: rgba(2, 6, 23, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; backdrop-filter: blur(6px); }
+      @keyframes packShake { 0%,100%{transform:rotate(0) scale(1)} 25%{transform:rotate(-6deg) scale(1.06)} 50%{transform:rotate(6deg) scale(1.1)} 75%{transform:rotate(-4deg) scale(1.06)} }
+      .pack-shaking { animation: packShake 0.35s infinite; font-size: 64px; }
     `;
     document.head.appendChild(st);
   })();
 
   /* =========================================================
-     3. قواعد اللعبة، الحزم، والتصنيف الأسطوري الصارم
+     3. القواعد، الحزم، والتصنيف الذكي (الاسم + الأنمي + القصة)
   ========================================================= */
   const RANK_POWER = { N: 1, C: 2, R: 3, SR: 4, SSR: 5, UR: 6, SP: 7 };
   const LIMITED_CAPS = { SP: 1, UR: 3, SSR: 10 };
@@ -72,7 +84,6 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   const DUP_GOLD_REWARD = { N: 30, C: 60, R: 130, SR: 280, SSR: 700, UR: 1500, SP: 3000 };
 
-  // حزم المتجر بنسب نادرة حقيقية (1/500 فأقل للنوادر) ومنع تسرّبها في N و C
   const SHOP_PACKS = [
     { id: "pack_N", rarity: "N", gold: 60, gem: 0, rates: { N: 74, C: 21, R: 5 } },
     { id: "pack_C", rarity: "C", gold: 120, gem: 0, rates: { N: 16, C: 62, R: 19, SR: 3 } },
@@ -83,47 +94,110 @@
     { id: "pack_SP", rarity: "SP", gold: 0, gem: 25, rates: { SR: 99.6, SSR: 0.15, UR: 0.15, SP: 0.1 } }
   ];
 
-  // SP: الأقوى مطلقاً في عالمهم وعالم الأنمي فقط
-  const SP_GOD_RE = /\b(son goku|goku|saitama|satoru gojo|gojo satoru|ryomen sukuna|sukuna|sung jin-?woo|jin-?woo|monkey d\.?\s*luffy|luffy|madara uchiha|hashirama senju|naruto uzumaki|sasuke uchiha|sousuke aizen|aizen|ichigo kurosaki|yhwach|yamamoto|rimuru tempest|anos voldigoad|gilgamesh|beerus|whis|zeno|edward newgate|whitebeard|shanks|kaido|yoriichi tsugikuni|meruem|isaac netero|alucard|ainz ooal gown|giorno giovanna|shigeo kageyama|mob|reinhard van astrea|guts|sinbad|simon|anti-spiral|jin mori|kaguya otsutsuki|isshiki)\b/i;
+  const MYTHIC_PACKS = [
+    { id: "mythic_ssr", rarity: "SSR", cls: "pack-ssr", title: "👑 حزمة SSR الخرافية", gems: 1000, goldReward: 15000, desc: "بطاقة SSR مضمونة + 15,000 🪙 ذهب فوري" },
+    { id: "mythic_ur", rarity: "UR", cls: "pack-ur", title: "🔥 حزمة UR الأسطورية", gems: 2500, goldReward: 50000, desc: "بطاقة UR مضمونة + 50,000 🪙 ذهب فوري" },
+    { id: "mythic_sp", rarity: "SP", cls: "pack-sp", title: "🌌 حزمة SP الكونية", gems: 5000, goldReward: 100000, desc: "بطاقة SP نادرة مضمونة + 100,000 🪙 ذهب فوري" }
+  ];
 
-  // UR: أقوى شخصيتين بعد القمة والأكثر مهارة وذكاءً وعبقرية
-  const UR_ELITE_RE = /\b(vegeta|gohan|broly|frieza|piccolo|roronoa zoro|zoro|dracule mihawk|mihawk|trafalgar|doflamingo|portgas d\.?\s*ace|sabo|monkey d\.?\s*garp|garp|itachi uchiha|minato namikaze|kakashi hatake|pain|nagato|obito uchiha|jiraiya|levi ackerman|levi|eren yeager|eren jaeger|mikasa ackerman|kenpachi zaraki|byakuya kuchiki|ulquiorra|toshiro hitsugaya|toji fushiguro|yuta okkotsu|suguru geto|killua zoldyck|hisoka|chrollo|kurapika|gon freecss|lelouch|l lawliet|light yagami|roy mustang|edward elric|muzan kibutsuji|kokushibo|akaza|kyojuro rengoku|tanjiro kamado|garou|tatsumaki|escanor|meliodas|ban|dio brando|jotaro kujo|ken kaneki|all might|izuku midoriya|katsuki bakugou|bakugo|shoto todoroki|griffith|thorfinn|erwin smith|shikamaru nara|dazai osamu|chuuya nakahara|artoria pendragon|saber|archer|emiya|frieren|makima|denji|esdeath|akame|erza scarlet|natsu dragneel|yami sukehiro|asta|yujiro hanma|baki hanma|spike spiegel|gintoki sakata|kamina|shinra kusakabe)\b/i;
+  // قواعد VIP دقيقة تتحقق من الاسم + الأنمي/القصة لمنع أي تشابه في الأسماء
+  const VIP_RULES = [
+    // SP (القمة المطلقة)
+    { names: ["monkey d. luffy", "luffy monkey"], anime: "one piece", rarity: "SP" },
+    { names: ["satoru gojo", "satoru gojou"], anime: "jujutsu", rarity: "SP" },
+    { names: ["ryomen sukuna", "sukuna"], anime: "jujutsu", rarity: "SP" },
+    { names: ["son goku", "goku son"], anime: "dragon ball", rarity: "SP" },
+    { names: ["guts"], anime: "berserk", rarity: "SP" },
+    { names: ["sung jin-woo", "jin-u seong", "jinwoo sung"], anime: "solo leveling", rarity: "SP" },
+    { names: ["sosuke aizen", "sousuke aizen"], anime: "bleach", rarity: "SP" },
+    { names: ["madara uchiha", "uchiha madara"], anime: "naruto", rarity: "SP" },
+    { names: ["levi", "levi ackerman"], anime: "titan", rarity: "SP" },
+    { names: ["lelouch lamperouge", "lelouch vi britannia"], anime: "geass", rarity: "SP" },
+    { names: ["shigeo kageyama"], anime: "mob psycho", rarity: "SP" },
+    { names: ["rimuru tempest"], anime: "slime", rarity: "SP" },
+    { names: ["saitama"], anime: "one punch", rarity: "SP" },
+    { names: ["edward newgate", "newgate edward"], anime: "one piece", rarity: "SP" },
+    { names: ["isaac netero"], anime: "hunter", rarity: "SP" },
+    { names: ["meruem"], anime: "hunter", rarity: "SP" },
+    { names: ["yoriichi tsugikuni"], anime: "demon slayer", rarity: "SP" },
+    { names: ["anos voldigoad"], anime: "demon king academy", rarity: "SP" },
+    { names: ["gilgamesh"], anime: "fate", rarity: "SP" },
+    { names: ["ainz ooal gown"], anime: "overlord", rarity: "SP" },
+    { names: ["sinbad"], anime: "magi", rarity: "SP" },
 
-  // أعمال غير قتالية (لا تدخل أبداً في SP أو UR أو SSR)
-  const NON_COMBAT_ANIME_RE = /k-on|silent voice|koe no katachi|clannad|toradora|kaguya|horimiya|bocchi|oregairu|fruits basket|your lie in april|hyouka|nichijou|lucky star|nisekoi|love live|kimi ni todoke|violet evergarden|anohana|angel beats|haruhi|monogatari|dress-up|komi|bunny girl|rascal does not dream|darling in the franxx|re:zero|steins;gate|oreimo|haikyuu|blue lock|kuroko|spy x family|oregairu|land of the lustrous|houseki no kuni|no game, no life/i;
+    // UR (النخبة والعباقرة)
+    { names: ["naruto uzumaki"], anime: "naruto", rarity: "UR" },
+    { names: ["sasuke uchiha", "itachi uchiha", "minato namikaze", "kakashi hatake"], anime: "naruto", rarity: "UR" },
+    { names: ["roronoa zoro", "zoro roronoa", "shanks", "sanji"], anime: "one piece", rarity: "UR" },
+    { names: ["eren yeager", "eren jaeger", "mikasa ackerman"], anime: "titan", rarity: "UR" },
+    { names: ["ichigo kurosaki", "kisuke urahara", "kenpachi zaraki"], anime: "bleach", rarity: "UR" },
+    { names: ["light yagami", "l lawliet", "ryuk"], anime: "death note", rarity: "UR" },
+    { names: ["killua zoldyck", "hisoka morow", "gon freecss", "kurapika", "chrollo lucilfer"], anime: "hunter", rarity: "UR" },
+    { names: ["vegeta", "piccolo", "gohan son", "son gohan"], anime: "dragon ball", rarity: "UR" },
+    { names: ["tanjirou kamado", "tanjiro kamado"], anime: "demon slayer", rarity: "UR" },
+    { names: ["edward elric", "roy mustang"], anime: "fullmetal", rarity: "UR" },
+    { names: ["dio brando", "jotaro kujo", "giorno giovanna"], anime: "jojo", rarity: "UR" },
+    { names: ["dazai osamu", "osamu dazai"], anime: "bungo", rarity: "UR" },
+    { names: ["gintoki sakata"], anime: "gintama", rarity: "UR" },
+
+    // SSR (شخصيات قوية ومحبوبة)
+    { names: ["sebastian michaelis"], anime: "black butler", rarity: "SSR" },
+    { names: ["ken kaneki"], anime: "tokyo ghoul", rarity: "SSR" },
+    { names: ["robin nico", "nico robin", "nami"], anime: "one piece", rarity: "SSR" },
+    { names: ["senkuu ishigami"], anime: "dr. stone", rarity: "SSR" },
+    { names: ["manjirou sano"], anime: "tokyo revengers", rarity: "SSR" },
+    { names: ["megumi fushiguro", "yuta okkotsu"], anime: "jujutsu", rarity: "SSR" },
+    { names: ["kusuo saiki"], anime: "saiki", rarity: "SSR" },
+    { names: ["koro-sensei"], anime: "assassination", rarity: "SSR" },
+    { names: ["keigo takami", "izuku midoriya", "katsuki bakugou", "shouto todoroki"], anime: "hero academia", rarity: "SSR" },
+    { names: ["shinei nouzen"], anime: "86", rarity: "SSR" }
+  ];
+
+  const NON_COMBAT_ANIME_RE = /k-on|silent voice|koe no katachi|clannad|toradora|kaguya-sama|horimiya|bocchi|oregairu|fruits basket|your lie in april|hyouka|nichijou|lucky star|nisekoi|love live|kimi ni todoke|violet evergarden|anohana|angel beats|haruhi|dress-up|komi|bunny girl|rascal does not dream|oreimo|haikyuu|blue lock|kuroko|aikatsu|real girl|food wars|shokugeki|paradise kiss|tokyo mew mew|natsume|princess kaguya/i;
   const COMBAT_GENRES = ["Action", "Adventure", "Fantasy", "Supernatural", "Sci-Fi", "Mecha"];
+  const COMBAT_STORY_RE = /\b(fight|battle|warrior|sword|demon|curse|magic|power|king|assassin|hero|villain|hunter|ninja|pirate|shinigami|sorcerer|saiyan|titan|alchemist|stand|quirk|strongest|army)\b/i;
 
   function classifyStrictRarity(ch) {
-    const name = String(ch.name || "");
-    const anime = String(ch.anime || "");
-    const favs = Number(ch.favorites || 0);
+    if (!ch) return "N";
+    const name = String(ch.name || "").trim().toLowerCase();
+    const anime = String(ch.anime || "").trim().toLowerCase();
+    const story = String(ch.bioEn || "").toLowerCase();
+    const favs = Number(ch.favorites || ch.favourites || 0);
     const genres = Array.isArray(ch.genres) ? ch.genres : [];
 
-    // 1. استثناء صارم لـ SP (القمة المطلقة فقط)
-    if (SP_GOD_RE.test(name) && !/darling in the franxx/i.test(anime)) return "SP";
-    // 2. استثناء صارم لـ UR (الأقوى بعد القمة والعباقرة المهرة)
-    if (UR_ELITE_RE.test(name)) return "UR";
+    // 1. فحص قائمة VIP بالاسم الكامل + الأنمي/القصة معاً
+    for (const rule of VIP_RULES) {
+      if (rule.names.includes(name)) {
+        if (!rule.anime || anime.includes(rule.anime) || story.includes(rule.anime)) {
+          return rule.rarity;
+        }
+      }
+    }
 
-    // 3. منع أي شخصية من أعمال غير قتالية أو شريحة حياة من دخول SSR/UR/SP
+    // 2. استبعاد الأعمال غير القتالية من النوادر العليا
     const isBlockedAnime = NON_COMBAT_ANIME_RE.test(anime);
-    const isCombat = !isBlockedAnime && (genres.length === 0 ? favs >= 6000 : genres.some((g) => COMBAT_GENRES.includes(g)));
+    const hasCombatGenre = genres.some((g) => COMBAT_GENRES.includes(g));
+    const hasCombatStory = COMBAT_STORY_RE.test(story);
+    const isCombat = !isBlockedAnime && (hasCombatGenre || (genres.length === 0 && hasCombatStory));
 
     if (isCombat) {
-      if (favs >= 8500) return "SSR";
-      if (favs >= 3200) return "SR";
-      if (favs >= 1100) return "R";
+      if (favs >= 32000) return "SP";
+      if (favs >= 16000) return "UR";
+      if (favs >= 7500) return "SSR";
+      if (favs >= 3000) return "SR";
+      if (favs >= 1000) return "R";
       if (favs >= 350) return "C";
       return "N";
     }
 
-    if (favs >= 10000) return "SR";
+    if (favs >= 12000) return "SR";
     if (favs >= 3500) return "R";
     if (favs >= 900) return "C";
     return "N";
   }
 
   /* =========================================================
-     4. قاموس الترجمة الشامل للغات الأربع (AR / EN / FR / JA)
+     4. قاموس الترجمة للغات الأربع (AR / EN / FR / JA)
   ========================================================= */
   const I18N = {
     ar: {
@@ -136,16 +210,16 @@
       trivia_title: "ألغاز الشخصيات والقدرات", lbl_streak: "السلسلة",
       tmode_img: "🖼️ صورة", tmode_sil: "🗡️ سلاح / قدرة", tmode_lore: "📜 قصة / وصف",
       trivia_who: "من هي هذه الشخصية؟", trivia_clue: "تعرّف على الشخصية من سلاحها أو قدرتها!", trivia_lore: "من صاحب هذه القصة؟",
-      btn_5050: "✂️ حذف إجابتين", btn_skip: "⏭️ سؤال جديد", pop_title: "أي شخصية أكثر شعبية؟",
+      btn_5050: "✂️ حذف إجابة (50 🪙)", btn_skip: "⏭️ سؤال جديد", pop_title: "أي شخصية أكثر شعبية؟",
       online_tab_arena: "⚔️ ساحة 1 ضد 1", online_tab_challenges: "📩 التحديات", online_tab_leaders: "🏆 المتصدرون",
       online_title: "نزال الـ 6 بطاقات المباشر", online_sub: "اختر نمط المواجهة وتحدّ خصمك بكود الغرفة المباشر",
       lbl_duel_mode: "اختر نوع المواجهة:", mode_safe_title: "نزال آمن", mode_safe_desc: "ذهب + جواهر + كؤوس بدون مخاطرة",
-      mode_gems_title: "رهان الجواهر", mode_gems_desc: "30 💎 للفائز بموافقة الطرفين",
+      mode_gems_title: "رهان الجواهر", mode_gems_desc: "30 / 100 / 1000 💎 بموافقة الطرفين",
       mode_card_title: "رهان بطاقة نادرة", mode_card_desc: "مواجهة مصيرية على بطاقات النوادر",
       lbl_pick_stake: "اضغط على بطاقتك النادرة للرهان:", btn_create_room: "➕ إنشاء غرفة نزال جديدة",
       ph_room_code: "كود من 4 أرقام", btn_join_room: "دخول", lbl_room_code: "الكود", btn_leave: "خروج",
       consent_warn: "⚠️ نزال رهان: يتطلب موافقة الطرفين قبل البدء", btn_agree: "✅ أوافق على الرهان", btn_cancel: "❌ إلغاء",
-      ch_title: "📩 تحديات البطاقات النادرة", ch_desc: "عندما يتحداك لاعب من سجل النوادر على بطاقتك، يظهر التحدي هنا.",
+      ch_title: "📩 تحديات البطاقات النادرة", ch_desc: "تظهر هنا تحديات اللاعبين على بطاقاتك النادرة.",
       lead_title: "🏆 أبطال السيرفر (Top 20)", shop_title: "🛒 متجر الحزم الأسطورية",
       shop_sub: "استدعِ أعظم شخصيات الأنمي — النوادر الحقيقية لا تظهر إلا للمحظوظين!",
       inv_title: "بطاقاتي", inv_unlimited: "∞ مخزون مفتوح", ph_search_cards: "🔍 ابحث بالاسم أو الأنمي...",
@@ -188,17 +262,17 @@
       lbl_you: "You", lbl_opp: "Opponent", shuffle_hint: "Memorize card positions!", btn_start_duel: "⚡ Start Duel",
       trivia_title: "Character & Ability Trivia", lbl_streak: "Streak",
       tmode_img: "🖼️ Image", tmode_sil: "🗡️ Weapon / Power", tmode_lore: "📜 Story / Lore",
-      trivia_who: "Who is this character?", trivia_clue: "Guess the character by their weapon or power!", trivia_lore: "Who does this story belong to?",
-      btn_5050: "✂️ 50/50 Cut", btn_skip: "⏭️ New Question", pop_title: "Which character is more popular?",
+      trivia_who: "Who is this character?", trivia_clue: "Guess by weapon or power!", trivia_lore: "Who does this story belong to?",
+      btn_5050: "✂️ Remove 1 (50 🪙)", btn_skip: "⏭️ New Question", pop_title: "Which character is more popular?",
       online_tab_arena: "⚔️ 1v1 Arena", online_tab_challenges: "📩 Challenges", online_tab_leaders: "🏆 Leaderboard",
       online_title: "Live 6-Card Duel", online_sub: "Pick your duel mode and battle live with a room code",
       lbl_duel_mode: "Select Duel Mode:", mode_safe_title: "Safe Duel", mode_safe_desc: "Gold + Gems + Trophies with zero risk",
-      mode_gems_title: "Gem Wager", mode_gems_desc: "30 💎 to winner with mutual consent",
+      mode_gems_title: "Gem Wager", mode_gems_desc: "30 / 100 / 1000 💎 with mutual consent",
       mode_card_title: "Rare Card Stake", mode_card_desc: "High-stakes clash for rare limited cards",
       lbl_pick_stake: "Tap your rare card to stake:", btn_create_room: "➕ Create Duel Room",
       ph_room_code: "4-digit code", btn_join_room: "Join", lbl_room_code: "Code", btn_leave: "Leave",
       consent_warn: "⚠️ Wager Duel: Both players must agree before starting", btn_agree: "✅ Agree to Stake", btn_cancel: "❌ Cancel",
-      ch_title: "📩 Rare Card Challenges", ch_desc: "Incoming challenges from players wanting your rare cards appear here.",
+      ch_title: "📩 Rare Card Challenges", ch_desc: "Incoming challenges for your rare cards appear here.",
       lead_title: "🏆 Server Champions (Top 20)", shop_title: "🛒 Legendary Pack Shop",
       shop_sub: "Summon iconic anime heroes — true limited rares await the luckiest!",
       inv_title: "My Cards", inv_unlimited: "∞ Unlimited Vault", ph_search_cards: "🔍 Search by name or anime...",
@@ -208,144 +282,118 @@
       set_title: "⚙️ Settings & Profile", set_name: "Server Player Name:", btn_save: "Save",
       set_lang: "Language:", set_bgm: "🎵 Background Music", set_sfx: "🔔 Sound Effects",
       set_uid: "Account ID", set_shield: "Protection Shield", set_pool: "Loaded Characters",
-      pack_N: "Starter Pack", pack_N_desc: "Core anime heroes summon",
-      pack_C: "Adventurer Pack", pack_C_desc: "Higher chance for fan-favorite heroes",
-      pack_R: "Elite Pack", pack_R_desc: "Iconic fighters from hit series",
-      pack_SR: "Captain Pack", pack_SR_desc: "Strong heroes & a shot at legends",
-      pack_SSR: "Mythic Pack", pack_SSR_desc: "Gateway to global rare editions",
-      pack_UR: "Ultra Pack", pack_UR_desc: "Crafted for rare card hunters",
+      pack_N: "Starter Pack", pack_N_desc: "Core anime heroes summon", pack_C: "Adventurer Pack", pack_C_desc: "Fan-favorite heroes",
+      pack_R: "Elite Pack", pack_R_desc: "Iconic fighters from hit series", pack_SR: "Captain Pack", pack_SR_desc: "Strong heroes & legends",
+      pack_SSR: "Mythic Pack", pack_SSR_desc: "Gateway to global rares", pack_UR: "Ultra Pack", pack_UR_desc: "For rare card hunters",
       pack_SP: "Monarch Pack", pack_SP_desc: "The ultimate royal summon",
       lbl_anime: "Anime", lbl_pop: "Popularity", lbl_serial: "Edition", lbl_bio: "📜 Biography & Lore",
       lbl_owners: "👑 Current Owners", lbl_free_slots: "Available in Shop", lbl_unlimited_copy: "Standard Unlimited Edition",
       btn_challenge: "⚔️ Challenge", btn_recycle: "♻️ Convert to", btn_accept: "Accept", btn_reject: "Decline",
       msg_loading_bio: "Loading dossier...", msg_no_cards: "No cards yet — open a pack in the Shop!",
-      msg_no_rares_stake: "You have no limited rare card (SSR/UR/SP) to stake yet.", msg_no_gold: "⚠️ Not enough Gold!",
+      msg_no_rares_stake: "No limited rare card (SSR/UR/SP) to stake.", msg_no_gold: "⚠️ Not enough Gold!",
       msg_no_gems: "⚠️ Not enough Gems!", msg_shield_off: "Inactive",
-      msg_protected: "👑 Protected Rare Card (only won or lost in Wager Duels)",
-      msg_waiting_opp: "Waiting for opponent...", msg_your_turn: "🟢 Your turn! Pick a card", msg_opp_turn: "⏳ Waiting for opponent...",
+      msg_protected: "👑 Protected Rare Card", msg_waiting_opp: "Waiting for opponent...",
+      msg_your_turn: "🟢 Your turn! Pick a card", msg_opp_turn: "⏳ Waiting for opponent...",
       msg_memorize: "👀 Memorize the 6 cards!", msg_shuffling: "🔀 Rapid shuffling...",
       msg_win: "🏆 Victory!", msg_lose: "Defeat — try again!", msg_saved: "✅ Saved!",
-      dup_converted: "♻️ Duplicate card! Converted to Gold:", codex_more: "🔄 Load More Legends",
-      codex_searching: "🔍 Searching...", pop_pick_bet: "Pick your wager (6s timer per round • Double ×2):",
+      dup_converted: "♻️ Duplicate! Converted to Gold:", codex_more: "🔄 Load More Legends",
+      codex_searching: "🔍 Searching...", pop_pick_bet: "Pick your wager (6s timer • Double ×2):",
       pop_low: "Low Risk", pop_mid: "Medium Risk", pop_high: "High Risk",
       pop_round: "Round", pop_pot: "Pot", pop_risk: "Risk", pop_time: "⏱️ Time",
       pop_cashout: "💰 Cash Out", pop_double: "🔥 Double ×2",
-      pop_lost: "💥 Wager lost!", pop_timeout: "⏰ Time's up! Wager lost", pop_cashed: "✅ Prize collected!"
+      pop_lost: "💥 Wager lost!", pop_timeout: "⏰ Time's up!", pop_cashed: "✅ Prize collected!"
     },
     fr: {
-      app_title: "Légendes des Cartes Anime", app_subtitle: "Collectionne les Rares • Duel en Ligne • Prends le Trône",
+      app_title: "Légendes des Cartes Anime", app_subtitle: "Collectionne les Rares • Duel en Ligne",
       start_play: "Jouer", nav_arena: "Arène", nav_online: "En ligne", nav_shop: "Boutique", nav_cards: "Mes Cartes", nav_codex: "Raretés",
       solo_shuffle: "🎴 Duel 6 Cartes", solo_trivia: "🧠 Quiz Anime", solo_pop: "🔥 Popularité",
       shuffle_title: "Duel Mémoire (6 Cartes)", shuffle_ready: "Choisis la difficulté",
       diff_normal: "Normal (+2 💎)", diff_hard: "Difficile (+3 💎)", diff_legend: "Légendaire (+4 💎)",
       lbl_you: "Toi", lbl_opp: "Adversaire", shuffle_hint: "Mémorise les cartes !", btn_start_duel: "⚡ Lancer le Duel",
-      trivia_title: "Quiz Personnages & Pouvoirs", lbl_streak: "Série",
-      tmode_img: "🖼️ Image", tmode_sil: "🗡️ Arme / Pouvoir", tmode_lore: "📜 Histoire",
-      trivia_who: "Qui est ce personnage ?", trivia_clue: "Devine le personnage grâce à son arme ou pouvoir !", trivia_lore: "À qui appartient cette histoire ?",
-      btn_5050: "✂️ 50/50", btn_skip: "⏭️ Suivant", pop_title: "Quel personnage est le plus populaire ?",
+      trivia_title: "Quiz Personnages", lbl_streak: "Série", tmode_img: "🖼️ Image", tmode_sil: "🗡️ Arme / Pouvoir", tmode_lore: "📜 Histoire",
+      trivia_who: "Qui est ce personnage ?", trivia_clue: "Devine grâce au pouvoir !", trivia_lore: "À qui appartient cette histoire ?",
+      btn_5050: "✂️ Retirer 1 (50 🪙)", btn_skip: "⏭️ Suivant", pop_title: "Quel personnage est le plus populaire ?",
       online_tab_arena: "⚔️ Arène 1v1", online_tab_challenges: "📩 Défis", online_tab_leaders: "🏆 Classement",
-      online_title: "Duel Direct 6 Cartes", online_sub: "Choisis ton mode et affronte un joueur avec un code",
+      online_title: "Duel Direct 6 Cartes", online_sub: "Affronte un joueur avec un code",
       lbl_duel_mode: "Mode de Duel :", mode_safe_title: "Duel Sûr", mode_safe_desc: "Or + Gemmes + Trophées sans risque",
-      mode_gems_title: "Pari Gemmes", mode_gems_desc: "30 💎 au vainqueur avec accord mutuel",
-      mode_card_title: "Pari Carte Rare", mode_card_desc: "Duel décisif pour cartes rares limitées",
-      lbl_pick_stake: "Choisis ta carte rare à miser :", btn_create_room: "➕ Créer une Salle",
+      mode_gems_title: "Pari Gemmes", mode_gems_desc: "30 / 100 / 1000 💎 avec accord mutuel",
+      mode_card_title: "Pari Carte Rare", mode_card_desc: "Duel décisif pour cartes rares",
+      lbl_pick_stake: "Choisis ta carte rare :", btn_create_room: "➕ Créer une Salle",
       ph_room_code: "Code à 4 chiffres", btn_join_room: "Rejoindre", lbl_room_code: "Code", btn_leave: "Quitter",
-      consent_warn: "⚠️ Duel à enjeu : accord des deux joueurs requis", btn_agree: "✅ Accepter le Pari", btn_cancel: "❌ Annuler",
-      ch_title: "📩 Défis de Cartes Rares", ch_desc: "Les défis envoyés pour tes cartes rares s'affichent ici.",
-      lead_title: "🏆 Champions du Serveur (Top 20)", shop_title: "🛒 Boutique de Packs",
-      shop_sub: "Invoque les plus grands héros — les vraies raretés sont légendaires !",
-      inv_title: "Mes Cartes", inv_unlimited: "∞ Stock Illimité", ph_search_cards: "🔍 Chercher par nom ou anime...",
-      filter_all: "Tout", btn_load_more: "Afficher plus ⬇️",
-      codex_title: "👑 Codex des Légendes", codex_sub: "Clique sur une carte pour lire son dossier complet",
-      ph_search_rare: "🔍 Chercher une légende...", btn_claim: "Super ! Récupérer",
-      set_title: "⚙️ Paramètres & Profil", set_name: "Nom du Joueur :", btn_save: "Enregistrer",
-      set_lang: "Langue :", set_bgm: "🎵 Musique", set_sfx: "🔔 Effets Sonores",
-      set_uid: "ID Compte", set_shield: "Bouclier", set_pool: "Personnages chargés",
-      pack_N: "Pack Débutant", pack_N_desc: "Invocation de héros d'anime",
-      pack_C: "Pack Aventurier", pack_C_desc: "Héros appréciés des fans",
-      pack_R: "Pack Élite", pack_R_desc: "Combattants célèbres",
-      pack_SR: "Pack Capitaine", pack_SR_desc: "Héros puissants & chance de légendes",
-      pack_SSR: "Pack Mythique", pack_SSR_desc: "Porte vers les éditions rares",
-      pack_UR: "Pack Ultra", pack_UR_desc: "Conçu pour les chasseurs de rares",
-      pack_SP: "Pack Royal", pack_SP_desc: "L'invocation suprême",
-      lbl_anime: "Anime", lbl_pop: "Popularité", lbl_serial: "Édition", lbl_bio: "📜 Biographie & Détails",
-      lbl_owners: "👑 Propriétaires actuels", lbl_free_slots: "Dispo en Boutique", lbl_unlimited_copy: "Édition Standard Illimitée",
-      btn_challenge: "⚔️ Défier", btn_recycle: "♻️ Convertir en", btn_accept: "Accepter", btn_reject: "Refuser",
-      msg_loading_bio: "Traduction...", msg_no_cards: "Aucune carte — ouvre un pack en boutique !",
-      msg_no_rares_stake: "Aucune carte rare (SSR/UR/SP) disponible.", msg_no_gold: "⚠️ Pas assez d'or !",
-      msg_no_gems: "⚠️ Pas assez de gemmes !", msg_shield_off: "Inactif",
-      msg_protected: "👑 Carte Rare Protégée (uniquement en Duel Pari)",
-      msg_waiting_opp: "En attente d'un adversaire...", msg_your_turn: "🟢 À toi ! Choisis une carte", msg_opp_turn: "⏳ Tour de l'adversaire...",
-      msg_memorize: "👀 Mémorise les 6 cartes !", msg_shuffling: "🔀 Mélange rapide...",
-      msg_win: "🏆 Victoire !", msg_lose: "Défaite — réessaie !", msg_saved: "✅ Enregistré !",
-      dup_converted: "♻️ Carte en double ! Convertie en Or :", codex_more: "🔄 Charger plus de Légendes",
-      codex_searching: "🔍 Recherche...", pop_pick_bet: "Choisis ta mise (chrono 6s • Doubler ×2) :",
-      pop_low: "Risque Faible", pop_mid: "Risque Moyen", pop_high: "Haut Risque",
-      pop_round: "Manche", pop_pot: "Gains", pop_risk: "Difficulté", pop_time: "⏱️ Temps",
-      pop_cashout: "💰 Encaisser", pop_double: "🔥 Doubler ×2",
-      pop_lost: "💥 Mise perdue !", pop_timeout: "⏰ Temps écoulé ! Mise perdue", pop_cashed: "✅ Gains encaissés !"
+      consent_warn: "⚠️ Accord des deux joueurs requis", btn_agree: "✅ Accepter", btn_cancel: "❌ Annuler",
+      ch_title: "📩 Défis de Cartes Rares", ch_desc: "Les défis pour tes cartes rares s'affichent ici.",
+      lead_title: "🏆 Top 20", shop_title: "🛒 Boutique de Packs", shop_sub: "Invoque les plus grands héros !",
+      inv_title: "Mes Cartes", inv_unlimited: "∞ Stock Illimité", ph_search_cards: "🔍 Chercher...",
+      filter_all: "Tout", btn_load_more: "Afficher plus ⬇️", codex_title: "👑 Codex des Légendes",
+      codex_sub: "Clique sur une carte pour voir son dossier", ph_search_rare: "🔍 Chercher...", btn_claim: "Récupérer",
+      set_title: "⚙️ Paramètres", set_name: "Nom :", btn_save: "Enregistrer", set_lang: "Langue :",
+      set_bgm: "🎵 Musique", set_sfx: "🔔 Effets", set_uid: "ID", set_shield: "Bouclier", set_pool: "Personnages",
+      pack_N: "Pack Débutant", pack_N_desc: "Invocation de base", pack_C: "Pack Aventurier", pack_C_desc: "Héros appréciés",
+      pack_R: "Pack Élite", pack_R_desc: "Combattants célèbres", pack_SR: "Pack Capitaine", pack_SR_desc: "Héros puissants",
+      pack_SSR: "Pack Mythique", pack_SSR_desc: "Éditions rares", pack_UR: "Pack Ultra", pack_UR_desc: "Chasseurs de rares",
+      pack_SP: "Pack Royal", pack_SP_desc: "Invocation suprême",
+      lbl_anime: "Anime", lbl_pop: "Popularité", lbl_serial: "Édition", lbl_bio: "📜 Biographie",
+      lbl_owners: "👑 Propriétaires", lbl_free_slots: "Dispo", lbl_unlimited_copy: "Standard",
+      btn_challenge: "⚔️ Défier", btn_recycle: "♻️ Convertir", btn_accept: "Accepter", btn_reject: "Refuser",
+      msg_loading_bio: "Traduction...", msg_no_cards: "Aucune carte !", msg_no_rares_stake: "Aucune carte rare.",
+      msg_no_gold: "⚠️ Pas assez d'or !", msg_no_gems: "⚠️ Pas assez de gemmes !", msg_shield_off: "Inactif",
+      msg_protected: "👑 Carte Protégée", msg_waiting_opp: "En attente...", msg_your_turn: "🟢 À toi !",
+      msg_opp_turn: "⏳ Tour adverse...", msg_memorize: "👀 Mémorise !", msg_shuffling: "🔀 Mélange...",
+      msg_win: "🏆 Victoire !", msg_lose: "Défaite !", msg_saved: "✅ Enregistré !",
+      dup_converted: "♻️ Double ! Or :", codex_more: "🔄 Charger plus", codex_searching: "🔍 Recherche...",
+      pop_pick_bet: "Choisis ta mise (6s • ×2) :", pop_low: "Faible", pop_mid: "Moyen", pop_high: "Haut",
+      pop_round: "Manche", pop_pot: "Gains", pop_risk: "Risque", pop_time: "⏱️ Temps",
+      pop_cashout: "💰 Encaisser", pop_double: "🔥 Doubler ×2", pop_lost: "💥 Perdu !", pop_timeout: "⏰ Temps écoulé !", pop_cashed: "✅ Encaissé !"
     },
     ja: {
-      app_title: "アニメカード・レジェンド", app_subtitle: "限定レア収集 • オンライン対戦 • 王座を奪え",
+      app_title: "アニメカード・レジェンド", app_subtitle: "限定レア収集 • オンライン対戦",
       start_play: "ゲーム開始", nav_arena: "アリーナ", nav_online: "オンライン", nav_shop: "ショップ", nav_cards: "所持カード", nav_codex: "限定図鑑",
       solo_shuffle: "🎴 6枚カード決闘", solo_trivia: "🧠 アニメクイズ", solo_pop: "🔥 人気対決",
-      shuffle_title: "記憶決闘 (6枚)", shuffle_ready: "難易度を選んで開始",
+      shuffle_title: "記憶決闘 (6枚)", shuffle_ready: "難易度を選択",
       diff_normal: "普通 (+2 💎)", diff_hard: "難しい (+3 💎)", diff_legend: "伝説 (+4 💎)",
-      lbl_you: "あなた", lbl_opp: "相手", shuffle_hint: "カードの位置を記憶せよ！", btn_start_duel: "⚡ 決闘開始",
-      trivia_title: "キャラ＆能力クイズ", lbl_streak: "連勝",
-      tmode_img: "🖼️ 画像", tmode_sil: "🗡️ 武器・能力", tmode_lore: "📜 ストーリー",
-      trivia_who: "このキャラクターは誰？", trivia_clue: "武器や能力のヒントからキャラを当てよう！", trivia_lore: "この物語の主人公は誰？",
-      btn_5050: "✂️ 2択削除", btn_skip: "⏭️ 次の問題", pop_title: "より人気のあるキャラは？",
+      lbl_you: "あなた", lbl_opp: "相手", shuffle_hint: "位置を記憶せよ！", btn_start_duel: "⚡ 決闘開始",
+      trivia_title: "アニメクイズ", lbl_streak: "連勝", tmode_img: "🖼️ 画像", tmode_sil: "🗡️ 武器・能力", tmode_lore: "📜 ストーリー",
+      trivia_who: "このキャラは誰？", trivia_clue: "ヒントから当てよう！", trivia_lore: "この物語の主人公は？",
+      btn_5050: "✂️ 1択削除 (50 🪙)", btn_skip: "⏭️ 次の問題", pop_title: "より人気のあるキャラは？",
       online_tab_arena: "⚔️ 1対1対戦", online_tab_challenges: "📩 挑戦状", online_tab_leaders: "🏆 ランキング",
-      online_title: "リアルタイム6枚決闘", online_sub: "モードを選んでルームコードで対戦しよう",
-      lbl_duel_mode: "対戦モード選択：", mode_safe_title: "安全マッチ", mode_safe_desc: "リスクなしで報酬＆トロフィー獲得",
-      mode_gems_title: "ジェム賭け戦", mode_gems_desc: "双方同意で勝者に30 💎",
-      mode_card_title: "限定カード争奪戦", mode_card_desc: "希少カードを懸けた真剣勝負",
+      online_title: "リアルタイム6枚決闘", online_sub: "ルームコードで対戦しよう",
+      lbl_duel_mode: "モード選択：", mode_safe_title: "安全マッチ", mode_safe_desc: "リスクなしで報酬獲得",
+      mode_gems_title: "ジェム賭け戦", mode_gems_desc: "30 / 100 / 1000 💎",
+      mode_card_title: "限定カード争奪戦", mode_card_desc: "希少カードを懸けた勝負",
       lbl_pick_stake: "賭けるレアカードを選択：", btn_create_room: "➕ ルーム作成",
       ph_room_code: "4桁コード", btn_join_room: "参加", lbl_room_code: "コード", btn_leave: "退出",
-      consent_warn: "⚠️ 賭け対戦：開始前に双方の同意が必要です", btn_agree: "✅ 条件に同意", btn_cancel: "❌ キャンセル",
-      ch_title: "📩 レアカード挑戦状", ch_desc: "図鑑から届いた対戦申し込みがここに表示されます。",
-      lead_title: "🏆 サーバートップ20", shop_title: "🛒 伝説ガチャショップ",
-      shop_sub: "名作アニメの英雄を召喚！真の限定レアは選ばれし者だけ。",
-      inv_title: "所持カード", inv_unlimited: "∞ 無制限ボックス", ph_search_cards: "🔍 キャラ名・作品名で検索...",
-      filter_all: "すべて", btn_load_more: "さらに表示 ⬇️",
-      codex_title: "👑 伝説レア図鑑", codex_sub: "カードをタップして詳細プロフィールを確認",
-      ph_search_rare: "🔍 伝説キャラを検索...", btn_claim: "受け取る！",
-      set_title: "⚙️ 設定とプロフィール", set_name: "プレイヤー名：", btn_save: "保存",
-      set_lang: "言語 / Language:", set_bgm: "🎵 BGM音楽", set_sfx: "🔔 効果音",
-      set_uid: "アカウントID", set_shield: "保護シールド", set_pool: "読込済みキャラ数",
-      pack_N: "スターターパック", pack_N_desc: "人気アニメキャラの基本召喚",
-      pack_C: "冒険者パック", pack_C_desc: "定番ヒーローが出やすいパック",
-      pack_R: "エリートパック", pack_R_desc: "名作の精鋭キャラが集結",
-      pack_SR: "隊長パック", pack_SR_desc: "強力キャラ＆伝説のチャンス",
-      pack_SSR: "神話パック", pack_SSR_desc: "世界限定レアへの扉",
-      pack_UR: "ウルトラパック", pack_UR_desc: "レアハンター専用召喚",
-      pack_SP: "王族パック", pack_SP_desc: "最高峰のロイヤル召喚",
-      lbl_anime: "作品名", lbl_pop: "人気度", lbl_serial: "シリアル", lbl_bio: "📜 プロフィール・詳細",
-      lbl_owners: "👑 現在の所有者", lbl_free_slots: "ショップ在庫", lbl_unlimited_copy: "通常無制限エディション",
-      btn_challenge: "⚔️ 挑戦", btn_recycle: "♻️ 変換する", btn_accept: "承諾", btn_reject: "拒否",
-      msg_loading_bio: "翻訳中...", msg_no_cards: "カードがありません。ショップで引いてみよう！",
-      msg_no_rares_stake: "賭けられる限定カード(SSR/UR/SP)がありません。", msg_no_gold: "⚠️ ゴールド不足！",
-      msg_no_gems: "⚠️ ジェム不足！", msg_shield_off: "未発動",
-      msg_protected: "👑 保護レアカード（賭け決闘でのみ移動）",
-      msg_waiting_opp: "対戦相手を待っています...", msg_your_turn: "🟢 あなたの番！カードを選択", msg_opp_turn: "⏳ 相手の選択を待っています...",
-      msg_memorize: "👀 6枚のカードを記憶せよ！", msg_shuffling: "🔀 高速シャッフル中...",
-      msg_win: "🏆 勝利！", msg_lose: "敗北 — 再挑戦しよう！", msg_saved: "✅ 保存しました！",
-      dup_converted: "♻️ 重複カード！ゴールドに変換：", codex_more: "🔄 伝説キャラをさらに読み込む",
-      codex_searching: "🔍 検索中...", pop_pick_bet: "賭け金を選択（制限時間6秒 • 2倍チャレンジ）：",
-      pop_low: "低リスク", pop_mid: "中リスク", pop_high: "高リスク",
-      pop_round: "ラウンド", pop_pot: "賞金", pop_risk: "難易度", pop_time: "⏱️ 残り時間",
-      pop_cashout: "💰 賞金を受け取る", pop_double: "🔥 続行して2倍",
-      pop_lost: "💥 賭け金没収！", pop_timeout: "⏰ 時間切れ！賭け金没収", pop_cashed: "✅ 賞金を獲得！"
+      consent_warn: "⚠️ 双方の同意が必要です", btn_agree: "✅ 同意", btn_cancel: "❌ キャンセル",
+      ch_title: "📩 挑戦状", ch_desc: "届いた挑戦状が表示されます。", lead_title: "🏆 トップ20",
+      shop_title: "🛒 ガチャショップ", shop_sub: "名作アニメの英雄を召喚！",
+      inv_title: "所持カード", inv_unlimited: "∞ 無制限", ph_search_cards: "🔍 検索...",
+      filter_all: "すべて", btn_load_more: "さらに表示 ⬇️", codex_title: "👑 伝説レア図鑑",
+      codex_sub: "タップして詳細を確認", ph_search_rare: "🔍 検索...", btn_claim: "受け取る！",
+      set_title: "⚙️ 設定", set_name: "名前：", btn_save: "保存", set_lang: "言語 :",
+      set_bgm: "🎵 BGM", set_sfx: "🔔 効果音", set_uid: "ID", set_shield: "シールド", set_pool: "キャラ数",
+      pack_N: "スターター", pack_N_desc: "基本召喚", pack_C: "冒険者", pack_C_desc: "定番ヒーロー",
+      pack_R: "エリート", pack_R_desc: "精鋭キャラ", pack_SR: "隊長", pack_SR_desc: "強力キャラ",
+      pack_SSR: "神話", pack_SSR_desc: "限定レアへの扉", pack_UR: "ウルトラ", pack_UR_desc: "レアハンター専用",
+      pack_SP: "王族", pack_SP_desc: "最高峰の召喚",
+      lbl_anime: "作品名", lbl_pop: "人気度", lbl_serial: "シリアル", lbl_bio: "📜 プロフィール",
+      lbl_owners: "👑 所有者", lbl_free_slots: "在庫", lbl_unlimited_copy: "通常版",
+      btn_challenge: "⚔️ 挑戦", btn_recycle: "♻️ 変換", btn_accept: "承諾", btn_reject: "拒否",
+      msg_loading_bio: "翻訳中...", msg_no_cards: "カードがありません", msg_no_rares_stake: "レアカードがありません",
+      msg_no_gold: "⚠️ ゴールド不足！", msg_no_gems: "⚠️ ジェム不足！", msg_shield_off: "未発動",
+      msg_protected: "👑 保護カード", msg_waiting_opp: "待機中...", msg_your_turn: "🟢 あなたの番！",
+      msg_opp_turn: "⏳ 相手の番...", msg_memorize: "👀 記憶せよ！", msg_shuffling: "🔀 シャッフル中...",
+      msg_win: "🏆 勝利！", msg_lose: "敗北！", msg_saved: "✅ 保存しました！",
+      dup_converted: "♻️ 重複！ゴールド:", codex_more: "🔄 さらに読み込む", codex_searching: "🔍 検索中...",
+      pop_pick_bet: "賭け金を選択 (6秒 • 2倍)：", pop_low: "低", pop_mid: "中", pop_high: "高",
+      pop_round: "ラウンド", pop_pot: "賞金", pop_risk: "難易度", pop_time: "⏱️ 時間",
+      pop_cashout: "💰 獲得", pop_double: "🔥 2倍", pop_lost: "💥 没収！", pop_timeout: "⏰ 時間切れ！", pop_cashed: "✅ 獲得！"
     }
   };
 
   function t(key) {
     return (I18N[state.lang] && I18N[state.lang][key]) || I18N.ar[key] || key;
   }
-
   /* =========================================================
-     5. حالة اللاعب والتخزين + تصحيح تصنيف البطاقات القديمة تلقائياً
+     5. حالة اللاعب والتخزين
   ========================================================= */
   const STORAGE_KEY = "monarch_anime_legends_v3";
   const CACHE_CHARS_KEY = "monarch_anilist_cache_v5";
@@ -383,15 +431,24 @@
       transCache = JSON.parse(localStorage.getItem(CACHE_TRANS_KEY) || "{}");
     } catch (_) {}
 
-    // تصحيح تلقائي لتصنيف أي بطاقة موجودة مسبقاً في مخزون اللاعب
     let changed = false;
     state.inventory.forEach((c) => {
-      const fixedRarity = classifyStrictRarity({ name: c.name, anime: c.anime, favorites: c.favorites || 0 });
+      const cat = characterCatalog.get(Number(c.charId));
+      const fixedRarity = classifyStrictRarity({
+        name: c.name,
+        anime: c.anime || cat?.anime || "",
+        bioEn: c.bioEn || cat?.bioEn || "",
+        favorites: c.favorites || cat?.favorites || 0,
+        genres: cat?.genres || []
+      });
       if (c.rarity !== fixedRarity) {
         c.rarity = fixedRarity;
         if (!LIMITED_CAPS[fixedRarity]) {
           c.serial = null;
           c.maxCopies = null;
+        } else {
+          c.maxCopies = LIMITED_CAPS[fixedRarity];
+          c.serial = c.serial || 1;
         }
         changed = true;
       }
@@ -405,26 +462,24 @@
   }
 
   function saveCharCache() {
-  try {
-    const arr = Array.from(characterCatalog.values());
-    localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(arr));
-    localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
-  } catch (_) {
     try {
-      const compact = Array.from(characterCatalog.values()).map((c) => ({
-        ...c,
-        bioEn: c.bioEn ? c.bioEn.slice(0, 120) : ""
-      }));
-      localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(compact));
+      const arr = Array.from(characterCatalog.values());
+      localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(arr));
       localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
-    } catch (__) {}
+    } catch (_) {
+      try {
+        const compact = Array.from(characterCatalog.values()).map((c) => ({
+          ...c, bioEn: c.bioEn ? c.bioEn.slice(0, 120) : ""
+        }));
+        localStorage.setItem(CACHE_CHARS_KEY, JSON.stringify(compact));
+      } catch (__) {}
+    }
+    const el = document.getElementById("settingsCatalogCount");
+    if (el) el.textContent = characterCatalog.size;
   }
-  const el = document.getElementById("settingsCatalogCount");
-  if (el) el.textContent = characterCatalog.size;
-}
 
   /* =========================================================
-     6. جلب الشخصيات من AniList وتنظيف البيانات
+     6. جلب الشخصيات من AniList
   ========================================================= */
   const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 
@@ -455,7 +510,7 @@
       nativeName: raw.nativeName || "",
       anime: raw.anime || "Anime Legend",
       genres: Array.isArray(raw.genres) ? raw.genres : [],
-      favorites: Number(raw.favorites || 0),
+      favorites: Number(raw.favorites || raw.favourites || 0),
       image: raw.image,
       bioEn: raw.bioEn || `${raw.name || "Hero"} is a character from ${raw.anime || "anime"}.`
     };
@@ -517,34 +572,40 @@
   }
 
   async function ensureRichCatalog() {
-  if (isFetchingAniList || !navigator.onLine) return;
-  isFetchingAniList = true;
-  try {
-    const savedC = Number(localStorage.getItem("monarch_anilist_cursor_v1")) || 1;
-    const nextP = Math.max(codexPageCursor, savedC, Math.floor(characterCatalog.size / 45) + 1);
-    const pages = characterCatalog.size < 80 ? [1, 2, 12] : [nextP, nextP + 1, nextP + 2];
-
-    for (const p of pages) {
-      await fetchAniListPage(p);
-      codexPageCursor = Math.max(codexPageCursor, p + 1);
-      localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
+    if (isFetchingAniList || !navigator.onLine) return;
+    isFetchingAniList = true;
+    try {
+      const savedC = Number(localStorage.getItem("monarch_anilist_cursor_v1")) || 1;
+      const nextP = Math.max(codexPageCursor, savedC, Math.floor(characterCatalog.size / 45) + 1);
+      const pages = characterCatalog.size < 80 ? [1, 2, 12] : [nextP, nextP + 1];
+      for (const p of pages) {
+        await fetchAniListPage(p);
+        codexPageCursor = Math.max(codexPageCursor, p + 1);
+        localStorage.setItem("monarch_anilist_cursor_v1", String(codexPageCursor));
+      }
+      saveCharCache();
+      initStartScreenBackground();
+      updateHud();
+      renderCodex();
+    } catch (_) {} finally {
+      isFetchingAniList = false;
     }
-
-    saveCharCache();
-    initStartScreenBackground();
-    updateHud();
-    renderCodex();
-  } catch (err) {
-    console.warn("AniList fetch skipped:", err);
-  } finally {
-    isFetchingAniList = false;
   }
-}
-
 
   /* =========================================================
-     7. الترجمة التلقائية + نظام تلميحات الأسلحة والقدرات اللانهائي
+     7. الترجمة الفورية والتلميحات
   ========================================================= */
+  const INSTANT_BIO_DICT = {
+    "satoru gojo": { ar: "أقوى ساحر جوجوتسو في عصره، يمتلك عيني الستة وتقنية اللامحدود وتوسع نطاق الفراغ اللامتناهي." },
+    "satoru gojou": { ar: "أقوى ساحر جوجوتسو في عصره، يمتلك عيني الستة وتقنية اللامحدود وتوسع نطاق الفراغ اللامتناهي." },
+    "ryomen sukuna": { ar: "ملك اللعنات الأسطوري، يُعرف بقوته التدميرية الهائلة ومهارته القتالية المطلقة." },
+    "sung jin-woo": { ar: "ملك الظلال الذي ارتقى من أضعف صياد إلى قوة لا تُقهر قادر على إحياء جيش من الظلال." },
+    "jin-u seong": { ar: "ملك الظلال الذي ارتقى من أضعف صياد إلى قوة لا تُقهر قادر على إحياء جيش من الظلال." },
+    "son goku": { ar: "مقاتل سايان نشأ على الأرض ويعشق تحدي الأقوى باستمرار حتى وصوله للغريزة الفائقة." },
+    "monkey d. luffy": { ar: "قبطان قراصنة قبعة القش الساعي ليصبح ملك القراصنة بقدرة فاكهة المطاط." },
+    "luffy monkey": { ar: "قبطان قراصنة قبعة القش الساعي ليصبح ملك القراصنة بقدرة فاكهة المطاط." }
+  };
+
   async function getTranslatedText(cacheKey, textEn) {
     const lang = state.lang || "ar";
     if (lang === "en" || !textEn) return textEn;
@@ -568,75 +629,45 @@
   }
 
   function getTranslatedBio(charObj) {
-    return getTranslatedText(`bio_${charObj.id}`, charObj.bioEn || `${charObj.name} from ${charObj.anime}.`);
+    const lang = state.lang || "ar";
+    const keyName = String(charObj?.name || "").toLowerCase().trim();
+    if (lang !== "en" && INSTANT_BIO_DICT[keyName]?.[lang]) {
+      return Promise.resolve(INSTANT_BIO_DICT[keyName][lang]);
+    }
+    return Promise.race([
+      getTranslatedText(`bio_${charObj.id}`, charObj.bioEn || `${charObj.name} from ${charObj.anime}.`),
+      new Promise((resolve) => setTimeout(() => resolve(charObj.bioEn || `${charObj.name} — ${charObj.anime}`), 2500))
+    ]);
   }
 
-  // تلميحات أيقونية لأشهر الشخصيات + استخراج تلقائي لا نهائي من وصف وأنمي أي شخصية أخرى
   const ICONIC_CLUES = [
-    { re: /gojo/i, icon: "🤞", clueEn: "Blindfold, Six Eyes, Limitless & Domain Expansion: Unlimited Void" },
+    { re: /gojo/i, icon: "🤞", clueEn: "Blindfold, Six Eyes, Limitless & Unlimited Void" },
     { re: /sukuna/i, icon: "🔥", clueEn: "King of Curses, 20 Cursed Fingers & Malevolent Shrine" },
     { re: /luffy/i, icon: "👒", clueEn: "Straw Hat, Gum-Gum Fruit & Gear 5" },
     { re: /zoro/i, icon: "⚔️", clueEn: "Three-Sword Style (Santoryu), Enma & Green Hair" },
     { re: /goku/i, icon: "🟠", clueEn: "Power Pole, Kamehameha & Ultra Instinct" },
-    { re: /vegeta/i, icon: "👑", clueEn: "Prince of All Saiyans, Final Flash & Galick Gun" },
     { re: /naruto/i, icon: "🍥", clueEn: "Nine-Tails Fox (Kurama), Rasengan & Shadow Clones" },
-    { re: /sasuke/i, icon: "⚡", clueEn: "Sharingan, Rinnegan, Chidori & Sword of Kusanagi" },
-    { re: /itachi/i, icon: "👁️", clueEn: "Mangekyo Sharingan, Tsukuyomi, Amaterasu & Crows" },
     { re: /levi/i, icon: "🗡️", clueEn: "ODM Gear, Dual Blades & Humanity's Strongest Soldier" },
-    { re: /jin-?woo/i, icon: "🌑", clueEn: "Twin Daggers, 'Arise' Command & Shadow Monarch Army" },
-    { re: /saitama/i, icon: "🥊", clueEn: "Yellow Suit, Red Gloves & Defeats any enemy in One Punch" },
-    { re: /ichigo/i, icon: "🗡️", clueEn: "Zangetsu, Getsuga Tenshou & Substitute Soul Reaper" },
-    { re: /aizen/i, icon: "👓", clueEn: "Kyoka Suigetsu (Complete Hypnosis) & Hogyoku" },
-    { re: /guts/i, icon: "⚔️", clueEn: "Dragon Slayer Greatsword & Berserker Armor" },
-    { re: /killua/i, icon: "⚡", clueEn: "Yo-Yos, Godspeed Lightning & Zoldyck Assassin" },
-    { re: /tanjiro/i, icon: "🌊", clueEn: "Black Nichirin Blade, Hanafuda Earrings & Sun Breathing" },
-    { re: /light yagami/i, icon: "📓", clueEn: "Black Notebook that kills anyone whose name is written in it" },
-    { re: /l lawliet/i, icon: "🍰", clueEn: "World's Greatest Detective, sits crouched & loves sweets" },
-    { re: /lelouch/i, icon: "♟️", clueEn: "Zero Mask, Chess Mastermind & Geass of Absolute Obedience" },
-    { re: /edward elric/i, icon: "🦾", clueEn: "Automail Right Arm, Red Coat & Fullmetal Alchemist" },
-    { re: /roy mustang/i, icon: "🔥", clueEn: "Ignition Gloves & Snap of fingers creates Flame Alchemy" },
-    { re: /gilgamesh/i, icon: "👑", clueEn: "Gate of Babylon, Golden Armor & Sword of Rupture Ea" },
-    { re: /alucard/i, icon: "🔫", clueEn: "Red Trench Coat, Jackal & Casull Pistols, Vampire King" },
-    { re: /dio/i, icon: "⏱️", clueEn: "The World Stand, Time Stop & Throwing Knives" },
-    { re: /jotaro/i, icon: "⭐", clueEn: "Star Platinum Stand, Torn Cap & 'Yare Yare Daze'" },
-    { re: /kaneki/i, icon: "🎭", clueEn: "Zipper Mask, Red Rinkaku Kagune & Eyepatch" },
-    { re: /bakugou|bakugo/i, icon: "💥", clueEn: "Grenade Gauntlets & Explosion Quirk" },
-    { re: /midoriya/i, icon: "⚡", clueEn: "Green Lightning, Full Cowling & One For All" }
+    { re: /jin-?woo|jin-u/i, icon: "🌑", clueEn: "Twin Daggers, 'Arise' Command & Shadow Monarch Army" },
+    { re: /saitama/i, icon: "🥊", clueEn: "Yellow Suit, Red Gloves & One Punch" },
+    { re: /light yagami/i, icon: "📓", clueEn: "Black Notebook that kills anyone whose name is written in it" }
   ];
 
   function buildDynamicClueEn(ch) {
     const iconic = ICONIC_CLUES.find((x) => x.re.test(ch.name || ""));
     if (iconic) return { icon: iconic.icon, textEn: iconic.clueEn };
-
     const bio = ch.bioEn || "";
-    const lower = bio.toLowerCase();
-    let icon = "✨";
-    if (/sword|blade|katana|scythe|spear/i.test(lower)) icon = "⚔️";
-    else if (/gun|pistol|rifle|sniper/i.test(lower)) icon = "🔫";
-    else if (/magic|spell|wizard|witch|mana/i.test(lower)) icon = "🔮";
-    else if (/fire|flame|burn|inferno/i.test(lower)) icon = "🔥";
-    else if (/ice|frost|snow|water/i.test(lower)) icon = "❄️";
-    else if (/thunder|lightning|electric/i.test(lower)) icon = "⚡";
-    else if (/king|queen|prince|emperor|captain|leader/i.test(lower)) icon = "👑";
-    else if (/demon|vampire|devil|curse|shadow/i.test(lower)) icon = "🌑";
-    else if (/mecha|robot|eva|pilot/i.test(lower)) icon = "🤖";
-
-    // استخراج جملة مميزة تحتوي على قدرة أو سلاح أو لقب مع إخفاء اسم الشخصية
     const firstWord = (ch.name || "").split(" ")[0];
     const sentences = bio.split(/(?<=[.!?])\s+/).filter((s) => s.length > 20);
-    const powerSentence = sentences.find((s) => /power|ability|weapon|sword|magic|quirk|skill|known as|leader|captain|member|strongest|fight|wields|uses/i.test(s))
-      || sentences[0]
-      || `A notable character from the world of ${ch.anime}.`;
-
+    const chosen = sentences[0] || `A notable character from ${ch.anime}.`;
     const masked = firstWord.length > 2
-      ? powerSentence.replace(new RegExp(firstWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "???")
-      : powerSentence;
-
-    return { icon, textEn: masked.slice(0, 170) };
+      ? chosen.replace(new RegExp(firstWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "???")
+      : chosen;
+    return { icon: "✨", textEn: masked.slice(0, 170) };
   }
 
   /* =========================================================
-     8. الصوت والإشعارات وتطبيق اللغات الأربع
+     8. الصوت، الإشعارات، اللغات، ومزامنة الملاك الموحدة
   ========================================================= */
   let toastTimer = null;
   function showToast(msg) {
@@ -654,8 +685,7 @@
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      osc.connect(gain); gain.connect(ctx.destination);
       const now = ctx.currentTime;
       if (type === "win") {
         osc.frequency.setValueAtTime(520, now);
@@ -684,136 +714,111 @@
     const btn = document.getElementById("btnAudioToggle");
     if (btn) btn.textContent = state.bgmEnabled ? "🔊" : "🔇";
     if (!audio) return;
-    if (state.bgmEnabled) {
-      audio.volume = 0.35;
-      audio.play().catch(() => {});
-    } else {
-      audio.pause();
-    }
+    if (state.bgmEnabled) { audio.volume = 0.35; audio.play().catch(() => {}); }
+    else audio.pause();
   }
 
   function applyLanguage(lang) {
     state.lang = I18N[lang] ? lang : "ar";
     document.documentElement.lang = state.lang;
     document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
-
-    document.querySelectorAll("[data-i18n]").forEach((el) => {
-      el.textContent = t(el.getAttribute("data-i18n"));
-    });
-    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-      el.setAttribute("placeholder", t(el.getAttribute("data-i18n-placeholder")));
-    });
-    document.querySelectorAll(".lang-chip").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.lang === state.lang);
-    });
-
-    saveState();
-    updateHud();
-    renderShop();
-    renderInventory(false);
-    renderCodex();
-    populateMyStakeCardsRow();
+    document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.getAttribute("data-i18n")); });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => { el.setAttribute("placeholder", t(el.getAttribute("data-i18n-placeholder"))); });
+    document.querySelectorAll(".lang-chip").forEach((btn) => { btn.classList.toggle("active", btn.dataset.lang === state.lang); });
+    saveState(); updateHud(); renderShop(); renderInventory(false); renderCodex(); populateMyStakeCardsRow();
     if (currentTriviaAnswer) refreshTriviaView();
   }
 
-  /* =========================================================
-     9. مزامنة Firebase ونظام النسخ المحدودة + قانون النشاط
-  ========================================================= */
-  function syncPlayerToCloud() {
+  function isValidOwner(ow) {
+    return Boolean(ow && typeof ow === "object" && ow.uid && typeof ow.name === "string" && ow.name.trim() && ow.name.trim().toLowerCase() !== "undefined");
+  }
+
+  function getCleanOwnersForChar(cid, maxCopies) {
+    const map = new Map();
+    const remote = limitedRegistry[cid]?.owners || {};
+    Object.entries(remote).forEach(([slot, ow]) => {
+      if (isValidOwner(ow) && Number(slot) >= 1 && Number(slot) <= maxCopies) {
+        map.set(String(slot), ow);
+      }
+    });
+    state.inventory.forEach((c) => {
+      if (Number(c.charId) === Number(cid) && LIMITED_CAPS[c.rarity]) {
+        const already = Array.from(map.values()).some((o) => o.uid === state.uid);
+        if (!already) {
+          let s = Number(c.serial) || 1;
+          while (map.has(String(s)) && s < maxCopies) s++;
+          c.serial = s;
+          c.maxCopies = maxCopies;
+          map.set(String(s), { uid: state.uid, name: state.name, claimedAt: c.acquiredAt || Date.now(), lastActiveAt: Date.now() });
+        }
+      }
+    });
+    return map;
+  }
+
+  async function syncPlayerToCloud() {
     if (!db || !navigator.onLine) return;
     const now = Date.now();
     db.ref(`players/${state.uid}`).update({
-      uid: state.uid,
-      name: state.name,
-      trophies: state.trophies,
+      uid: state.uid, name: state.name, trophies: state.trophies,
       rareCount: state.inventory.filter((c) => LIMITED_CAPS[c.rarity]).length,
-      shieldUntil: state.shieldUntil || 0,
-      lastActive: now
+      shieldUntil: state.shieldUntil || 0, lastActive: now
     }).catch(() => {});
 
-    state.inventory.forEach((card) => {
-      if (LIMITED_CAPS[card.rarity] && card.serial) {
-        db.ref(`limitedCards/${card.charId}/owners/${card.serial}/lastActiveAt`).set(now).catch(() => {});
-      }
-    });
-  }
-
-  function cleanExpiredOwnersForCard(charId, rarity, entry) {
-    if (!entry || !entry.owners) return false;
-    const maxDays = INACTIVITY_DAYS[rarity];
-    if (!maxDays) return false;
-    const now = Date.now();
-    let changed = false;
-    Object.keys(entry.owners).forEach((slot) => {
-      const owner = entry.owners[slot];
-      if (!owner || !owner.lastActiveAt) return;
-      if (now - owner.lastActiveAt > maxDays * DAY_MS) {
-        delete entry.owners[slot];
-        changed = true;
-        if (db) db.ref(`limitedCards/${charId}/owners/${slot}`).remove().catch(() => {});
-      }
-    });
-    return changed;
+    for (const card of state.inventory) {
+      const max = LIMITED_CAPS[card.rarity];
+      if (!max || !card.charId) continue;
+      const slot = card.serial || 1;
+      db.ref(`limitedCards/${card.charId}/owners/${slot}`).set({
+        uid: state.uid, name: state.name, claimedAt: card.acquiredAt || now, lastActiveAt: now
+      }).catch(() => {});
+    }
   }
 
   function initFirebaseListeners() {
     if (!db) return;
-
     db.ref("limitedCards").on("value", (snap) => {
       limitedRegistry = snap.val() || {};
-      Object.keys(limitedRegistry).forEach((cid) => {
-        const entry = limitedRegistry[cid];
-        const ch = characterCatalog.get(Number(cid));
-        const rarity = ch?.rarity || entry?.rarity;
-        if (rarity && LIMITED_CAPS[rarity]) {
-          cleanExpiredOwnersForCard(cid, rarity, entry);
-        }
-      });
       renderCodex();
     });
-
     db.ref(`challenges/${state.uid}`).on("value", (snap) => {
-      const data = snap.val() || {};
-      const list = Object.values(data).filter((c) => c.status === "pending");
+      const list = Object.values(snap.val() || {}).filter((c) => c.status === "pending");
       const badge = document.getElementById("incomingBadge");
       const dot = document.getElementById("navOnlineDot");
-      badge.textContent = list.length;
-      badge.classList.toggle("hidden", list.length === 0);
-      dot.classList.toggle("hidden", list.length === 0);
+      if (badge) { badge.textContent = list.length; badge.classList.toggle("hidden", list.length === 0); }
+      if (dot) dot.classList.toggle("hidden", list.length === 0);
       renderIncomingChallenges(list);
     });
-
     db.ref("players").orderByChild("trophies").limitToLast(20).on("value", (snap) => {
       const players = [];
-      snap.forEach((child) => { players.push(child.val()); });
+      snap.forEach((child) => players.push(child.val()));
       players.sort((a, b) => (b.trophies || 0) - (a.trophies || 0));
       renderLeaderboard(players);
     });
   }
   /* =========================================================
-     10. الشريط العلوي، المخزون، وملف البطاقة الاحترافي
+     9. الشريط العلوي، المخزون، وملف البطاقة
   ========================================================= */
   let invRenderLimit = 30;
   let invFilterRarity = "ALL";
   let invSearchQuery = "";
 
   function updateHud() {
-    document.getElementById("hudPlayerName").textContent = state.name;
-    document.getElementById("startPlayerName").textContent = state.name;
-    document.getElementById("hudTrophies").textContent = state.trophies;
-    document.getElementById("goldCount").textContent = state.gold;
-    document.getElementById("gemCount").textContent = state.gems;
-    document.getElementById("ticketCount").textContent = state.tickets;
-    document.getElementById("invTotalCount").textContent = state.inventory.length;
-    document.getElementById("settingsUid").textContent = state.uid;
-    document.getElementById("inputPlayerName").value = state.name;
-    document.getElementById("settingsCatalogCount").textContent = characterCatalog.size;
-    document.getElementById("netDot").classList.toggle("offline", !navigator.onLine);
-
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setTxt("hudPlayerName", state.name);
+    setTxt("startPlayerName", state.name);
+    setTxt("hudTrophies", state.trophies);
+    setTxt("goldCount", state.gold);
+    setTxt("gemCount", state.gems);
+    setTxt("ticketCount", state.tickets);
+    setTxt("invTotalCount", state.inventory.length);
+    setTxt("settingsUid", state.uid);
+    setTxt("settingsCatalogCount", characterCatalog.size);
+    const inp = document.getElementById("inputPlayerName");
+    if (inp) inp.value = state.name;
+    document.getElementById("netDot")?.classList.toggle("offline", !navigator.onLine);
     const shieldActive = state.shieldUntil && state.shieldUntil > Date.now();
-    document.getElementById("settingsShield").textContent = shieldActive
-      ? `${Math.ceil((state.shieldUntil - Date.now()) / 3600000)}h`
-      : t("msg_shield_off");
+    setTxt("settingsShield", shieldActive ? `${Math.ceil((state.shieldUntil - Date.now()) / 3600000)}h` : t("msg_shield_off"));
   }
 
   function renderInventory(resetLimit = false) {
@@ -826,16 +831,14 @@
     const filtered = sorted.filter((c) => {
       const matchR = invFilterRarity === "ALL" || c.rarity === invFilterRarity;
       const q = invSearchQuery.trim().toLowerCase();
-      const matchQ = !q || c.name.toLowerCase().includes(q) || (c.anime || "").toLowerCase().includes(q);
-      return matchR && matchQ;
+      return matchR && (!q || c.name.toLowerCase().includes(q) || (c.anime || "").toLowerCase().includes(q));
     });
 
     const slice = filtered.slice(0, invRenderLimit);
     grid.innerHTML = "";
-
     if (slice.length === 0) {
       grid.innerHTML = `<p class="muted-text" style="grid-column:1/-1;text-align:center;padding:24px;">${t("msg_no_cards")}</p>`;
-      loadMoreBox.classList.add("hidden");
+      loadMoreBox?.classList.add("hidden");
       return;
     }
 
@@ -855,8 +858,7 @@
       div.addEventListener("click", () => openCardDossierModal(card, true));
       grid.appendChild(div);
     });
-
-    loadMoreBox.classList.toggle("hidden", filtered.length <= invRenderLimit);
+    loadMoreBox?.classList.toggle("hidden", filtered.length <= invRenderLimit);
   }
 
   async function openCardDossierModal(cardOrChar, isOwnedCard = false) {
@@ -864,45 +866,31 @@
     const body = document.getElementById("cardModalBody");
     const cid = Number(cardOrChar.charId || cardOrChar.id);
     const catalogChar = characterCatalog.get(cid) || cardOrChar;
-
-    const rarity = cardOrChar.rarity || catalogChar.rarity || "R";
+    const rarity = catalogChar.rarity || cardOrChar.rarity || "R";
     const isLimited = Boolean(LIMITED_CAPS[rarity]);
     const maxCopies = LIMITED_CAPS[rarity] || null;
     const fallback = makeFallbackSvg(catalogChar.name, rarity);
 
-    document.getElementById("cardModalTitle").textContent = `${catalogChar.name}`;
-
-    const serialDisplay = cardOrChar.serial
-      ? `#${cardOrChar.serial}/${cardOrChar.maxCopies}`
-      : isLimited ? `${maxCopies}/${maxCopies}` : t("lbl_unlimited_copy");
+    document.getElementById("cardModalTitle").textContent = catalogChar.name;
+    const serialDisplay = cardOrChar.serial ? `#${cardOrChar.serial}/${maxCopies}` : isLimited ? `${maxCopies}/${maxCopies}` : t("lbl_unlimited_copy");
 
     let ownersSectionHtml = "";
     if (isLimited) {
-      const regOwners = { ...(limitedRegistry[cid]?.owners || {}) };
-      const localOwned = state.inventory.find((c) => Number(c.charId) === cid && c.serial);
-      if (localOwned && !regOwners[localOwned.serial]) {
-        regOwners[localOwned.serial] = { uid: state.uid, name: state.name };
-      }
-      const ownerEntries = Object.entries(regOwners);
-      const freeCount = Math.max(0, maxCopies - ownerEntries.length);
-
-      let rowsHtml = `<div class="dossier-owner-row"><span>🛒 ${t("lbl_free_slots")}</span><b style="color:#4ade80;">${freeCount} / ${maxCopies}</b></div>`;
-      ownerEntries.forEach(([slot, ow]) => {
+      const ownersMap = getCleanOwnersForChar(cid, maxCopies);
+      const freeCount = Math.max(0, maxCopies - ownersMap.size);
+      let rowsHtml = `<div class="dossier-owner-row"><span>🛒 ${t("lbl_free_slots")}</span><b dir="ltr" style="color:${freeCount > 0 ? "#4ade80" : "#fb7185"};">${freeCount} / ${maxCopies}</b></div>`;
+      ownersMap.forEach((ow, slot) => {
         const isMe = ow.uid === state.uid;
         const btnHtml = !isMe
           ? `<button class="danger-btn-sm btn-dossier-ch" data-cid="${cid}" data-slot="${slot}" data-ouid="${ow.uid}" data-oname="${ow.name}">${t("btn_challenge")}</button>`
           : `<span class="status-badge">👑 ${t("lbl_you")}</span>`;
         rowsHtml += `
           <div class="dossier-owner-row">
-            <span>${isMe ? "👑 " + ow.name : "👤 " + ow.name} <small style="color:var(--gold);">#${slot}/${maxCopies}</small></span>
+            <span>${isMe ? "👑 " + ow.name : "👤 " + ow.name} <small dir="ltr" style="color:var(--gold);">#${slot}/${maxCopies}</small></span>
             ${btnHtml}
           </div>`;
       });
-
-      ownersSectionHtml = `
-        <div class="field-label" style="margin-top:8px;">${t("lbl_owners")}</div>
-        <div class="dossier-owners-section">${rowsHtml}</div>
-      `;
+      ownersSectionHtml = `<div class="field-label" style="margin-top:8px;">${t("lbl_owners")}</div><div class="dossier-owners-section">${rowsHtml}</div>`;
     }
 
     let footerActionHtml = "";
@@ -926,7 +914,6 @@
           </div>
         </div>
       </div>
-
       <div class="field-label">${t("lbl_bio")}</div>
       <div id="dossierBioText" class="dossier-lore-box">${t("msg_loading_bio")}</div>
       ${ownersSectionHtml}
@@ -940,22 +927,17 @@
       });
     });
 
-    const recycleBtn = document.getElementById("btnRecycleCard");
-    if (recycleBtn) {
-      recycleBtn.addEventListener("click", () => {
-        const idx = state.inventory.findIndex((x) => x.uidCard === cardOrChar.uidCard);
-        if (idx !== -1) {
-          const sellVal = (RANK_POWER[rarity] || 1) * 18;
-          state.inventory.splice(idx, 1);
-          state.gold += sellVal;
-          saveState();
-          updateHud();
-          renderInventory(false);
-          modal.classList.add("hidden");
-          showToast(`+${sellVal} 🪙`);
-        }
-      });
-    }
+    document.getElementById("btnRecycleCard")?.addEventListener("click", () => {
+      const idx = state.inventory.findIndex((x) => x.uidCard === cardOrChar.uidCard);
+      if (idx !== -1) {
+        const sellVal = (RANK_POWER[rarity] || 1) * 18;
+        state.inventory.splice(idx, 1);
+        state.gold += sellVal;
+        saveState(); updateHud(); renderInventory(false);
+        modal.classList.add("hidden");
+        showToast(`+${sellVal} 🪙`);
+      }
+    });
 
     modal.classList.remove("hidden");
     const translatedBio = await getTranslatedBio(catalogChar);
@@ -964,17 +946,59 @@
   }
 
   /* =========================================================
-     11. المتجر (نسب حقيقية مخفية + تحويل المكرر لذهب + خصم فوري)
+     10. المتجر (الحزم العادية + الحزم الخرافية SSR / UR / SP)
   ========================================================= */
   function rollRarity(rates) {
     const entries = Object.entries(rates);
-    const total = entries.reduce((sum, [, w]) => sum + w, 0);
-    let rand = Math.random() * total;
-    for (const [rarity, weight] of entries) {
-      rand -= weight;
-      if (rand <= 0) return rarity;
-    }
+    let rand = Math.random() * entries.reduce((s, [, w]) => s + w, 0);
+    for (const [r, w] of entries) { rand -= w; if (rand <= 0) return r; }
     return entries[0][0];
+  }
+
+  function openMythicPack(pack) {
+    if (state.gems < pack.gems) return showToast(`⚠️ تحتاج ${pack.gems} 💎`);
+    const allChars = Array.from(characterCatalog.values());
+    let pool = allChars.filter((c) => c.rarity === pack.rarity);
+    if (!pool.length) pool = allChars;
+    if (!pool.length) return showToast("⏳ Loading heroes...");
+
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    const maxCopies = LIMITED_CAPS[pack.rarity] || 10;
+    const ownersMap = getCleanOwnersForChar(chosen.id, maxCopies);
+    let freeSlot = 1;
+    for (let s = 1; s <= maxCopies; s++) { if (!ownersMap.has(String(s))) { freeSlot = s; break; } }
+
+    const newCard = {
+      uidCard: "c_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      charId: chosen.id, name: chosen.name, nativeName: chosen.nativeName || "",
+      anime: chosen.anime, image: chosen.image, bioEn: chosen.bioEn || "",
+      favorites: chosen.favorites || 0, rarity: pack.rarity,
+      serial: freeSlot, maxCopies, acquiredAt: Date.now()
+    };
+
+    state.gems -= pack.gems;
+    state.gold += pack.goldReward;
+    state.inventory.push(newCard);
+    saveState(); updateHud(); renderInventory(true); renderCodex();
+    playSfx("summon");
+
+    const overlay = document.createElement("div");
+    overlay.id = "mythicOpenOverlay";
+    overlay.innerHTML = `<div class="pack-shaking">🎁</div><h2 style="color:#fff;margin-top:16px;">جاري فتح ${pack.title}...</h2>`;
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      overlay.innerHTML = `
+        <div style="max-width:300px;width:100%;background:#0f172a;border-radius:18px;padding:18px;border:2px solid #f59e0b;box-shadow:0 0 35px rgba(245,158,11,0.5);">
+          <span class="mythic-badge" style="background:#f59e0b;margin-bottom:10px;">${pack.rarity} #${freeSlot}/${maxCopies}</span>
+          <img src="${newCard.image}" alt="${newCard.name}" style="width:100%;height:240px;object-fit:cover;border-radius:12px;margin-bottom:10px;" />
+          <h3 style="color:#fff;margin:6px 0;">${newCard.name}</h3>
+          <p style="color:#fbbf24;font-weight:bold;font-size:16px;margin:8px 0;">+${pack.goldReward.toLocaleString()} 🪙 ذهب!</p>
+          <button id="btnCloseMythicOverlay" class="primary-btn" style="width:100%;margin-top:10px;">${t("btn_claim")}</button>
+        </div>
+      `;
+      document.getElementById("btnCloseMythicOverlay")?.addEventListener("click", () => overlay.remove());
+    }, 1400);
   }
 
   function renderShop() {
@@ -1001,17 +1025,27 @@
     grid.querySelectorAll(".buy-btn").forEach((btn) => {
       btn.addEventListener("click", () => handlePackPurchase(btn.dataset.pack, btn.dataset.curr));
     });
+
+    MYTHIC_PACKS.forEach((pack) => {
+      const card = document.createElement("div");
+      card.className = `mythic-pack-card ${pack.cls}`;
+      card.innerHTML = `
+        <div>
+          <span class="mythic-badge">${pack.rarity} مضمون</span>
+          <h3 style="color:#fff;margin:8px 0 4px;">${pack.title}</h3>
+          <p style="color:#cbd5e1;font-size:13px;margin:0;">${pack.desc}</p>
+        </div>
+        <button type="button" class="primary-btn" style="width:100%;margin-top:8px;">شراء بـ ${pack.gems.toLocaleString()} 💎</button>
+      `;
+      card.querySelector("button").addEventListener("click", () => openMythicPack(pack));
+      grid.appendChild(card);
+    });
   }
 
   async function handlePackPurchase(packId, currency) {
     const pack = SHOP_PACKS.find((p) => p.id === packId);
     if (!pack) return;
-
-    if (characterCatalog.size < 25) {
-      await ensureRichCatalog();
-      if (characterCatalog.size === 0) return showToast("⚠️ Connect to internet!");
-    }
-
+    if (characterCatalog.size < 25) await ensureRichCatalog();
     if (currency === "gold") {
       if (state.gold < pack.gold) return showToast(t("msg_no_gold"));
       state.gold -= pack.gold;
@@ -1021,114 +1055,42 @@
     }
 
     const rolledRarity = rollRarity(pack.rates);
-    const allowedRarities = Object.keys(pack.rates);
-    let allChars = Array.from(characterCatalog.values());
+    const allChars = Array.from(characterCatalog.values());
     let pool = allChars.filter((c) => c.rarity === rolledRarity);
-
-    if (pool.length === 0 && !LIMITED_CAPS[rolledRarity]) {
-      await fetchAniListPage(50);
-      await fetchAniListPage(100);
-      allChars = Array.from(characterCatalog.values());
-      pool = allChars.filter((c) => c.rarity === rolledRarity);
-      if (pool.length === 0) pool = allChars.filter((c) => allowedRarities.includes(c.rarity) && !LIMITED_CAPS[c.rarity]);
-      if (pool.length === 0) pool = allChars.filter((c) => !LIMITED_CAPS[c.rarity]);
-    }
-
-    if (pool.length === 0) {
-      if (currency === "gold") state.gold += pack.gold; else state.gems += pack.gem;
-      updateHud();
-      return showToast("⏳ Loading heroes...");
-    }
-
-    if (LIMITED_CAPS[rolledRarity]) {
-      const maxCopies = LIMITED_CAPS[rolledRarity];
-      const availableOptions = [];
-      pool.forEach((ch) => {
-        const reg = limitedRegistry[ch.id] || { maxCopies, owners: {} };
-        cleanExpiredOwnersForCard(ch.id, rolledRarity, reg);
-        const owners = reg.owners || {};
-        for (let slot = 1; slot <= maxCopies; slot++) {
-          if (!owners[slot]) { availableOptions.push({ char: ch, slot, maxCopies }); break; }
-        }
-      });
-
-      if (availableOptions.length === 0) {
-        state.tickets += 1;
-        state.gems += 5;
-        saveState();
-        updateHud();
-        playSfx("win");
-        showToast("🎟️ +1 | 💎 +5");
-        return;
-      }
-
-      const pick = availableOptions[Math.floor(Math.random() * availableOptions.length)];
-      if (state.inventory.some((c) => Number(c.charId) === Number(pick.char.id))) {
-        const bonusGold = DUP_GOLD_REWARD[rolledRarity] || 700;
-        state.gold += bonusGold;
-        saveState();
-        updateHud();
-        showSummonReveal({ ...pick.char, rarity: rolledRarity, serial: null }, `${t("dup_converted")} +${bonusGold} 🪙`);
-        showToast(`${t("dup_converted")} +${bonusGold} 🪙`);
-        return;
-      }
-
-      const now = Date.now();
-      const newCard = {
-        uidCard: "c_" + now + "_" + Math.random().toString(36).slice(2, 6),
-        charId: pick.char.id, name: pick.char.name, nativeName: pick.char.nativeName || "",
-        anime: pick.char.anime, image: pick.char.image, bioEn: pick.char.bioEn || "",
-        favorites: pick.char.favorites || 0, rarity: rolledRarity,
-        serial: pick.slot, maxCopies: pick.maxCopies, acquiredAt: now
-      };
-
-      if (!limitedRegistry[pick.char.id]) {
-        limitedRegistry[pick.char.id] = { charId: pick.char.id, name: pick.char.name, rarity: rolledRarity, maxCopies: pick.maxCopies, owners: {} };
-      }
-      if (!limitedRegistry[pick.char.id].owners) limitedRegistry[pick.char.id].owners = {};
-      limitedRegistry[pick.char.id].owners[pick.slot] = { uid: state.uid, name: state.name, claimedAt: now, lastActiveAt: now };
-
-      if (db && navigator.onLine) {
-        try {
-          await db.ref(`limitedCards/${pick.char.id}`).update({ charId: pick.char.id, name: pick.char.name, rarity: rolledRarity, maxCopies: pick.maxCopies });
-          await db.ref(`limitedCards/${pick.char.id}/owners/${pick.slot}`).set({ uid: state.uid, name: state.name, claimedAt: now, lastActiveAt: now });
-        } catch (_) {}
-      }
-
-      state.inventory.push(newCard);
-      saveState();
-      updateHud();
-      renderInventory(true);
-      renderCodex();
-      showSummonReveal(newCard, `👑 #${pick.slot}/${pick.maxCopies}`);
-      return;
-    }
+    if (!pool.length) pool = allChars.filter((c) => !LIMITED_CAPS[c.rarity]);
+    if (!pool.length) return showToast("⏳ Loading heroes...");
 
     const chosen = pool[Math.floor(Math.random() * pool.length)];
     if (state.inventory.some((c) => Number(c.charId) === Number(chosen.id))) {
       const dupGold = DUP_GOLD_REWARD[chosen.rarity] || 40;
       state.gold += dupGold;
-      saveState();
-      updateHud();
-      playSfx("win");
+      saveState(); updateHud(); playSfx("win");
       showSummonReveal({ ...chosen, serial: null }, `${t("dup_converted")} +${dupGold} 🪙`);
-      showToast(`${t("dup_converted")} +${dupGold} 🪙`);
       return;
     }
 
-    const normalCard = {
+    const maxCopies = LIMITED_CAPS[chosen.rarity] || null;
+    let serial = null;
+    if (maxCopies) {
+      const owners = getCleanOwnersForChar(chosen.id, maxCopies);
+      for (let s = 1; s <= maxCopies; s++) { if (!owners.has(String(s))) { serial = s; break; } }
+      if (!serial) {
+        state.tickets += 1; state.gems += 5;
+        saveState(); updateHud(); return showToast("🎟️ +1 | 💎 +5");
+      }
+    }
+
+    const newCard = {
       uidCard: "c_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
       charId: chosen.id, name: chosen.name, nativeName: chosen.nativeName || "",
       anime: chosen.anime, image: chosen.image, bioEn: chosen.bioEn || "",
       favorites: chosen.favorites || 0, rarity: chosen.rarity,
-      serial: null, maxCopies: null, acquiredAt: Date.now()
+      serial, maxCopies, acquiredAt: Date.now()
     };
 
-    state.inventory.push(normalCard);
-    saveState();
-    updateHud();
-    renderInventory(true);
-    showSummonReveal(normalCard, chosen.anime);
+    state.inventory.push(newCard);
+    saveState(); updateHud(); renderInventory(true); renderCodex();
+    showSummonReveal(newCard, serial ? `👑 #${serial}/${maxCopies}` : chosen.anime);
   }
 
   function showSummonReveal(card, noteText) {
@@ -1138,21 +1100,17 @@
     const fallback = makeFallbackSvg(card.name, card.rarity);
     document.getElementById("summonHeadline").textContent = `✨ ${card.rarity} — ${card.name}`;
     document.getElementById("summonNote").textContent = noteText;
-
     const serialHtml = card.serial ? `<span class="serial-tag">#${card.serial}/${card.maxCopies}</span>` : "";
     stage.innerHTML = `
       <img src="${card.image}" alt="${card.name}" onerror="this.onerror=null;this.src='${fallback}'" />
-      <div class="inv-card-top">
-        <span class="card-rarity-pill r-${card.rarity}">${card.rarity}</span>
-        ${serialHtml}
-      </div>
+      <div class="inv-card-top"><span class="card-rarity-pill r-${card.rarity}">${card.rarity}</span>${serialHtml}</div>
       <div class="inv-card-name">${card.name}</div>
     `;
     modal.classList.remove("hidden");
   }
 
   /* =========================================================
-     12. سجل النوادر التلقائي (يعرض جميع الأساطير + بحث حي)
+     11. سجل النوادر، التحديات، ولوحة المتصدرين
   ========================================================= */
   let codexFilter = "ALL";
   let codexSearch = "";
@@ -1164,32 +1122,18 @@
 
     const allLegends = Array.from(characterCatalog.values())
       .filter((ch) => ch && LIMITED_CAPS[ch.rarity])
-      .sort((a, b) => {
-        const diff = (RANK_POWER[b.rarity] || 0) - (RANK_POWER[a.rarity] || 0);
-        return diff !== 0 ? diff : (b.favorites || 0) - (a.favorites || 0);
-      });
+      .sort((a, b) => (RANK_POWER[b.rarity] - RANK_POWER[a.rarity]) || ((b.favorites || 0) - (a.favorites || 0)));
 
     if (counterEl) counterEl.textContent = allLegends.length;
-
     const q = (codexSearch || "").trim().toLowerCase();
-    const filtered = allLegends.filter((c) => {
-      const okR = codexFilter === "ALL" || c.rarity === codexFilter;
-      const okQ = !q || c.name.toLowerCase().includes(q) || (c.anime || "").toLowerCase().includes(q);
-      return okR && okQ;
-    });
+    const filtered = allLegends.filter((c) => (codexFilter === "ALL" || c.rarity === codexFilter) && (!q || c.name.toLowerCase().includes(q) || (c.anime || "").toLowerCase().includes(q)));
 
     grid.innerHTML = "";
     filtered.forEach((ch) => {
       const max = LIMITED_CAPS[ch.rarity];
-      const regOwners = { ...(limitedRegistry[ch.id]?.owners || {}) };
-      const localOwned = state.inventory.find((c) => Number(c.charId) === Number(ch.id) && c.serial);
-      if (localOwned && !regOwners[localOwned.serial]) {
-        regOwners[localOwned.serial] = { uid: state.uid, name: state.name };
-      }
-
-      const freeCount = Math.max(0, max - Object.keys(regOwners).length);
+      const owners = getCleanOwnersForChar(ch.id, max);
+      const freeCount = Math.max(0, max - owners.size);
       const fallback = makeFallbackSvg(ch.name, ch.rarity);
-
       const card = document.createElement("div");
       card.className = `codex-card tier-${ch.rarity}`;
       card.innerHTML = `
@@ -1202,7 +1146,7 @@
           <h4>${ch.name}</h4>
           <div class="anime-sub">${ch.anime || "Anime Legend"}</div>
           <div class="codex-card-foot">
-            <span style="color:${freeCount > 0 ? "#4ade80" : "#fb7185"};">${freeCount > 0 ? `${t("lbl_free_slots")}: ${freeCount}/${max}` : "👑 0/" + max}</span>
+            <span style="color:${freeCount > 0 ? "#4ade80" : "#fb7185"};">${t("lbl_free_slots")}: ${freeCount}/${max}</span>
             <span style="color:var(--gold);">ℹ️</span>
           </div>
         </div>
@@ -1215,10 +1159,8 @@
     moreWrap.className = "codex-load-more";
     moreWrap.innerHTML = `<button id="btnCodexMoreLive" class="secondary-btn full-w">${t("codex_more")}</button>`;
     grid.appendChild(moreWrap);
-
     document.getElementById("btnCodexMoreLive")?.addEventListener("click", async (e) => {
-      e.target.disabled = true;
-      e.target.textContent = t("codex_searching");
+      e.target.disabled = true; e.target.textContent = t("codex_searching");
       await fetchAniListPage(codexPageCursor++);
       renderCodex();
     });
@@ -1241,7 +1183,7 @@
   function renderIncomingChallenges(list) {
     const box = document.getElementById("challengesList");
     if (!box) return;
-    if (list.length === 0) { box.innerHTML = `<p class="muted-text" style="text-align:center;padding:16px;">---</p>`; return; }
+    if (!list.length) { box.innerHTML = `<p class="muted-text" style="text-align:center;padding:16px;">---</p>`; return; }
     box.innerHTML = "";
     list.forEach((ch) => {
       const div = document.createElement("div");
@@ -1264,9 +1206,7 @@
       });
     });
     box.querySelectorAll(".btn-reject-ch").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (db) await db.ref(`challenges/${state.uid}/${btn.dataset.id}`).remove();
-      });
+      btn.addEventListener("click", async () => { if (db) await db.ref(`challenges/${state.uid}/${btn.dataset.id}`).remove(); });
     });
   }
 
@@ -1282,53 +1222,42 @@
       </div>
     `).join("");
   }
-
   /* =========================================================
-     13. الأوضاع الفردية: 6 بطاقات (رتب مختلفة 100%) + ألغاز + شعبية بمؤقت 6ث
+     12. الأوضاع الفردية: 6 بطاقات + الألغاز + الشعبية
   ========================================================= */
   let soloDiff = "normal";
   let soloState = { active: false, phase: "idle", cards: [], picked: [], turn: "player" };
   let soloRunId = 0;
 
-  // اختيار 6 بطاقات بـ 6 تصنيفات مختلفة تماماً (لا يوجد تكرار للرتبة أبداً)
   function pickSixUniqueRarityCards() {
     const all = Array.from(characterCatalog.values());
-    const allRarities = ["N", "C", "R", "SR", "SSR", "UR", "SP"].sort(() => Math.random() - 0.5);
+    const rarities = ["N", "C", "R", "SR", "SSR", "UR", "SP"].sort(() => Math.random() - 0.5);
     const chosen = [];
-    for (const r of allRarities) {
+    for (const r of rarities) {
       if (chosen.length === 6) break;
       const bucket = all.filter((c) => c.rarity === r);
-      if (bucket.length > 0) {
-        chosen.push(bucket[Math.floor(Math.random() * bucket.length)]);
-      }
+      if (bucket.length) chosen.push(bucket[Math.floor(Math.random() * bucket.length)]);
     }
     return chosen.sort(() => Math.random() - 0.5);
   }
 
   async function animateRealCardSwap(idxA, idxB, durationMs) {
     const board = document.getElementById("soloBoard");
-    if (!board) return;
-    const slots = board.querySelectorAll(".duel-slot");
-    const elA = slots[idxA], elB = slots[idxB];
+    const slots = board?.querySelectorAll(".duel-slot");
+    const elA = slots?.[idxA], elB = slots?.[idxB];
     if (!elA || !elB) return;
-
     const rA = elA.getBoundingClientRect(), rB = elB.getBoundingClientRect();
     const dx = rB.left - rA.left, dy = rB.top - rA.top;
 
-    elA.classList.add("moving-card");
-    elB.classList.add("moving-card");
-    elA.style.transition = `transform ${durationMs}ms cubic-bezier(0.45, 0.05, 0.55, 0.95)`;
-    elB.style.transition = `transform ${durationMs}ms cubic-bezier(0.45, 0.05, 0.55, 0.95)`;
+    elA.classList.add("moving-card"); elB.classList.add("moving-card");
+    elA.style.transition = `transform ${durationMs}ms ease`;
+    elB.style.transition = `transform ${durationMs}ms ease`;
     elA.style.transform = `translate(${dx}px, ${dy}px) scale(1.03)`;
     elB.style.transform = `translate(${-dx}px, ${-dy}px) scale(1.03)`;
-
     playSfx("click");
     await new Promise((r) => setTimeout(r, durationMs + 25));
 
-    const temp = soloState.cards[idxA];
-    soloState.cards[idxA] = soloState.cards[idxB];
-    soloState.cards[idxB] = temp;
-
+    [soloState.cards[idxA], soloState.cards[idxB]] = [soloState.cards[idxB], soloState.cards[idxA]];
     elA.style.transition = "none"; elB.style.transition = "none";
     elA.style.transform = ""; elB.style.transform = "";
     elA.classList.remove("moving-card"); elB.classList.remove("moving-card");
@@ -1341,27 +1270,20 @@
       sixCards = pickSixUniqueRarityCards();
       if (sixCards.length < 6) return showToast("⏳ Loading heroes...");
     }
-
     const runId = ++soloRunId;
     soloState = { active: true, phase: "preview", cards: sixCards, picked: Array(6).fill(null), turn: "player" };
-
-    const cfg = soloDiff === "legendary"
-      ? { preview: 1900, swaps: 12, speed: 165 }
-      : soloDiff === "hard"
-      ? { preview: 2300, swaps: 8, speed: 260 }
+    const cfg = soloDiff === "legendary" ? { preview: 1900, swaps: 12, speed: 165 }
+      : soloDiff === "hard" ? { preview: 2300, swaps: 8, speed: 260 }
       : { preview: 2800, swaps: 5, speed: 410 };
 
     document.getElementById("soloShuffleStatus").textContent = t("msg_memorize");
-    document.getElementById("soloRoundHint").textContent = t("shuffle_hint");
     renderSoloBoard(true);
-
     await new Promise((r) => setTimeout(r, cfg.preview));
     if (runId !== soloRunId) return;
 
     soloState.phase = "shuffling";
     document.getElementById("soloShuffleStatus").textContent = t("msg_shuffling");
     renderSoloBoard(false);
-
     await new Promise((r) => setTimeout(r, 240));
     for (let i = 0; i < cfg.swaps; i++) {
       if (runId !== soloRunId) return;
@@ -1370,10 +1292,8 @@
       while (b === a) b = Math.floor(Math.random() * 6);
       await animateRealCardSwap(a, b, cfg.speed);
     }
-
     if (runId !== soloRunId) return;
-    soloState.phase = "picking";
-    soloState.turn = "player";
+    soloState.phase = "picking"; soloState.turn = "player";
     document.getElementById("soloShuffleStatus").textContent = t("msg_your_turn");
     renderSoloBoard(false);
   }
@@ -1382,10 +1302,8 @@
     const board = document.getElementById("soloBoard");
     if (!board) return;
     board.innerHTML = "";
-    const myCount = soloState.picked.filter((x) => x === "player").length;
-    const botCount = soloState.picked.filter((x) => x === "bot").length;
-    document.getElementById("soloPlayerPicks").textContent = `${myCount}/3`;
-    document.getElementById("soloBotPicks").textContent = `${botCount}/3`;
+    document.getElementById("soloPlayerPicks").textContent = `${soloState.picked.filter((x) => x === "player").length}/3`;
+    document.getElementById("soloBotPicks").textContent = `${soloState.picked.filter((x) => x === "bot").length}/3`;
 
     soloState.cards.forEach((card, idx) => {
       const owner = soloState.picked[idx];
@@ -1394,15 +1312,9 @@
       slot.className = "duel-slot";
       const borderCls = owner === "player" ? " picked-me" : owner === "bot" ? " picked-opp" : "";
       const fallback = makeFallbackSvg(card.name, card.rarity);
-
       slot.innerHTML = showFace
-        ? `<div class="duel-card-inner${borderCls}">
-             <img src="${card.image}" alt="${card.name}" onerror="this.onerror=null;this.src='${fallback}'" />
-             <span class="card-rarity-pill r-${card.rarity}">${card.rarity}</span>
-             <div class="card-bottom-label">${card.name}</div>
-           </div>`
+        ? `<div class="duel-card-inner${borderCls}"><img src="${card.image}" alt="${card.name}" onerror="this.onerror=null;this.src='${fallback}'" /><span class="card-rarity-pill r-${card.rarity}">${card.rarity}</span><div class="card-bottom-label">${card.name}</div></div>`
         : `<div class="duel-card-inner face-down"></div>`;
-
       slot.addEventListener("click", () => handleSoloCardClick(idx));
       board.appendChild(slot);
     });
@@ -1415,7 +1327,6 @@
     const myCount = soloState.picked.filter((x) => x === "player").length;
     const botCount = soloState.picked.filter((x) => x === "bot").length;
     renderSoloBoard(false);
-
     if (myCount + botCount === 6) return finishSoloShuffleDuel();
     if (myCount === 1 && botCount === 0) { soloState.turn = "bot"; botPickCards(2); }
     else if (myCount === 3 && botCount === 2) { soloState.turn = "bot"; botPickCards(1); }
@@ -1426,57 +1337,61 @@
     let left = count;
     const step = () => {
       const free = soloState.picked.map((v, i) => (v === null ? i : -1)).filter((i) => i !== -1);
-      if (free.length === 0 || left <= 0) {
+      if (!free.length || left <= 0) {
         if (soloState.picked.filter((x) => x !== null).length === 6) return finishSoloShuffleDuel();
         soloState.turn = "player";
         document.getElementById("soloShuffleStatus").textContent = t("msg_your_turn");
         return;
       }
       soloState.picked[free[Math.floor(Math.random() * free.length)]] = "bot";
-      left--;
-      renderSoloBoard(false);
-      setTimeout(step, 420);
+      left--; renderSoloBoard(false); setTimeout(step, 420);
     };
     setTimeout(step, 420);
   }
 
   function finishSoloShuffleDuel() {
-    soloState.phase = "result";
-    renderSoloBoard(true);
-    let playerScore = 0, botScore = 0;
-    soloState.cards.forEach((c, idx) => {
+    soloState.phase = "result"; renderSoloBoard(true);
+    let pScore = 0, bScore = 0;
+    soloState.cards.forEach((c, i) => {
       const pwr = RANK_POWER[c.rarity] || 1;
-      if (soloState.picked[idx] === "player") playerScore += pwr;
-      else botScore += pwr;
+      if (soloState.picked[i] === "player") pScore += pwr; else bScore += pwr;
     });
-
     const gemReward = soloDiff === "legendary" ? 4 : soloDiff === "hard" ? 3 : 2;
     const goldReward = soloDiff === "legendary" ? 350 : soloDiff === "hard" ? 220 : 150;
-
-    if (playerScore >= botScore) {
-      state.gold += goldReward;
-      state.gems += gemReward;
-      saveState();
-      updateHud();
-      playSfx("win");
-      document.getElementById("soloShuffleStatus").textContent = `${t("msg_win")} (${playerScore} - ${botScore})`;
+    if (pScore >= bScore) {
+      state.gold += goldReward; state.gems += gemReward;
+      saveState(); updateHud(); playSfx("win");
+      document.getElementById("soloShuffleStatus").textContent = `${t("msg_win")} (${pScore} - ${bScore})`;
       showToast(`${t("msg_win")} +${goldReward} 🪙 | +${gemReward} 💎`);
     } else {
-      document.getElementById("soloShuffleStatus").textContent = `${t("msg_lose")} (${playerScore} - ${botScore})`;
+      document.getElementById("soloShuffleStatus").textContent = `${t("msg_lose")} (${pScore} - ${bScore})`;
       showToast(t("msg_lose"));
     }
   }
 
-  /* --- ألغاز الأنمي (صورة / سلاح وقدرة لا نهائية / قصة) --- */
+  /* --- ألغاز الأنمي (حذف إجابة واحدة بتكلفة 50 -> 100 -> 150 ذهب بدون حذف الصحيح أبداً) --- */
   let triviaMode = "image";
   let triviaStreak = 0;
   let currentTriviaAnswer = null;
+  const HINT_COSTS = [50, 100, 150];
+  let triviaHintCount = 0;
+
+  function updateTriviaHintBtn() {
+    const btn = document.getElementById("btnTrivia5050");
+    if (!btn) return;
+    if (triviaHintCount >= HINT_COSTS.length) {
+      btn.disabled = true;
+      btn.textContent = "✂️ تم حذف كل الأخطاء";
+    } else {
+      btn.disabled = false;
+      btn.textContent = `✂️ حذف إجابة (${HINT_COSTS[triviaHintCount]} 🪙)`;
+    }
+  }
 
   async function refreshTriviaView() {
     if (!currentTriviaAnswer) return;
     const mediaBox = document.getElementById("triviaMediaBox");
     const promptEl = document.getElementById("triviaPrompt");
-
     if (triviaMode === "image") {
       promptEl.textContent = t("trivia_who");
       mediaBox.innerHTML = `<img id="triviaImg" src="${currentTriviaAnswer.image}" alt="Quiz" />`;
@@ -1486,13 +1401,9 @@
       mediaBox.innerHTML = `
         <div class="clue-card-box">
           <div class="clue-emblem">${clue.icon}</div>
-          <div class="clue-tags">
-            <span class="clue-tag">🎬 ${currentTriviaAnswer.anime}</span>
-            <span class="clue-tag">⭐ ${currentTriviaAnswer.rarity}</span>
-          </div>
+          <div class="clue-tags"><span class="clue-tag">🎬 ${currentTriviaAnswer.anime}</span><span class="clue-tag">⭐ ${currentTriviaAnswer.rarity}</span></div>
           <p id="clueTranslatedText" class="trivia-lore">${t("msg_loading_bio")}</p>
-        </div>
-      `;
+        </div>`;
       const trClue = await getTranslatedText(`clue_${currentTriviaAnswer.id}`, clue.textEn);
       const clueEl = document.getElementById("clueTranslatedText");
       if (clueEl) clueEl.textContent = `« ${trClue} »`;
@@ -1512,8 +1423,10 @@
     if (all.length < 4) return ensureRichCatalog();
     const choices = [...all].sort(() => Math.random() - 0.5).slice(0, 4);
     currentTriviaAnswer = choices[0];
-    const options = [...choices].sort(() => Math.random() - 0.5);
+    triviaHintCount = 0;
+    updateTriviaHintBtn();
 
+    const options = [...choices].sort(() => Math.random() - 0.5);
     const optBox = document.getElementById("triviaOptions");
     optBox.innerHTML = "";
     options.forEach((opt) => {
@@ -1533,26 +1446,21 @@
       if (Number(b.dataset.id) === currentTriviaAnswer.id) b.classList.add("correct");
     });
     if (isCorrect) {
-      triviaStreak++;
-      state.gold += 120;
+      triviaStreak++; state.gold += 120;
       if (triviaStreak % 3 === 0) state.gems += 1;
-      saveState();
-      updateHud();
-      playSfx("win");
+      saveState(); updateHud(); playSfx("win");
       showToast("✅ +120 🪙" + (triviaStreak % 3 === 0 ? " | +1 💎" : ""));
     } else {
-      btn.classList.add("wrong");
-      triviaStreak = 0;
+      btn.classList.add("wrong"); triviaStreak = 0;
       showToast(`❌ ${currentTriviaAnswer.name}`);
     }
     document.getElementById("triviaStreak").textContent = triviaStreak;
     setTimeout(loadNextTriviaQuestion, 1300);
   }
 
-  /* --- تحدي الشعبية: 3 رهانات + مؤقت 6 ثوانٍ + مضاعفة ×2 --- */
-  let popBetState = { phase: "bet", baseBet: 0, pot: 0, round: 0, pair: [], usedIds: new Set() };
+  /* --- تحدي الشعبية --- */
+  let popBetState = { phase: "bet", baseBet: 0, pot: 0, round: 0, pair: [] };
   let popTimerInterval = null;
-  let popTimeLeftMs = 6000;
 
   function stopPopTimer() {
     if (popTimerInterval) { clearInterval(popTimerInterval); popTimerInterval = null; }
@@ -1560,24 +1468,17 @@
 
   function startPopTimer() {
     stopPopTimer();
-    popTimeLeftMs = 6000;
     const startedAt = Date.now();
     popTimerInterval = setInterval(() => {
       if (popBetState.phase !== "playing") return stopPopTimer();
-      popTimeLeftMs = Math.max(0, 6000 - (Date.now() - startedAt));
+      const left = Math.max(0, 6000 - (Date.now() - startedAt));
       const fill = document.getElementById("popTimerFill");
       const txt = document.getElementById("popTimerText");
-      const head = document.getElementById("popTimerHead");
-      const pct = (popTimeLeftMs / 6000) * 100;
-      if (fill) { fill.style.width = pct + "%"; fill.classList.toggle("danger", popTimeLeftMs <= 2000); }
-      if (txt) txt.textContent = (popTimeLeftMs / 1000).toFixed(1) + "s";
-      if (head) head.classList.toggle("danger", popTimeLeftMs <= 2000);
-
-      if (popTimeLeftMs <= 0) {
-        stopPopTimer();
-        popBetState.phase = "lost";
-        showToast(t("pop_timeout"));
-        renderPopularityGame();
+      if (fill) { fill.style.width = (left / 6000) * 100 + "%"; fill.classList.toggle("danger", left <= 2000); }
+      if (txt) txt.textContent = (left / 1000).toFixed(1) + "s";
+      if (left <= 0) {
+        stopPopTimer(); popBetState.phase = "lost";
+        showToast(t("pop_timeout")); renderPopularityGame();
         setTimeout(() => { popBetState.phase = "bet"; renderPopularityGame(); }, 1600);
       }
     }, 100);
@@ -1587,17 +1488,14 @@
     const all = Array.from(characterCatalog.values()).filter((c) => Number(c.favorites) > 0);
     if (all.length < 2) return [];
     const sorted = [...all].sort((a, b) => b.favorites - a.favorites);
-    const maxRatio = round <= 1 ? 4.5 : round === 2 ? 2.1 : round === 3 ? 1.45 : 1.18;
-    const minRatio = round <= 1 ? 1.7 : round === 2 ? 1.25 : 1.03;
-
-    for (let tries = 0; tries < 60; tries++) {
+    const maxRatio = round <= 1 ? 4.5 : round === 2 ? 2.1 : 1.4;
+    const minRatio = round <= 1 ? 1.7 : 1.05;
+    for (let i = 0; i < 60; i++) {
       const a = sorted[Math.floor(Math.random() * sorted.length)];
       const b = sorted[Math.floor(Math.random() * sorted.length)];
       if (!a || !b || a.id === b.id || a.favorites === b.favorites) continue;
       const ratio = Math.max(a.favorites, b.favorites) / Math.max(1, Math.min(a.favorites, b.favorites));
-      if (ratio >= minRatio && ratio <= maxRatio) {
-        return Math.random() < 0.5 ? [a, b] : [b, a];
-      }
+      if (ratio >= minRatio && ratio <= maxRatio) return Math.random() < 0.5 ? [a, b] : [b, a];
     }
     return [...all].sort(() => Math.random() - 0.5).slice(0, 2);
   }
@@ -1617,75 +1515,45 @@
             <button class="pop-bet-btn" data-bet="150"><span>150 🪙</span><small>${t("pop_mid")}</small></button>
             <button class="pop-bet-btn" data-bet="400"><span>400 🪙</span><small>${t("pop_high")}</small></button>
           </div>
-        </div>
-      `;
+        </div>`;
       box.querySelectorAll(".pop-bet-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const bet = Number(btn.dataset.bet);
           if (state.gold < bet) return showToast(t("msg_no_gold"));
           if (characterCatalog.size < 10) await ensureRichCatalog();
-          state.gold -= bet;
-          saveState();
-          updateHud();
-          popBetState = { phase: "playing", baseBet: bet, pot: bet * 2, round: 1, usedIds: new Set(), pair: pickDifficultyScaledPair(1) };
-          playSfx("click");
-          renderPopularityGame();
-          startPopTimer();
+          state.gold -= bet; saveState(); updateHud();
+          popBetState = { phase: "playing", baseBet: bet, pot: bet * 2, round: 1, pair: pickDifficultyScaledPair(1) };
+          playSfx("click"); renderPopularityGame(); startPopTimer();
         });
       });
       return;
     }
 
-    const stars = "🔥".repeat(Math.min(5, popBetState.round));
     const hud = document.createElement("div");
-    hud.className = "pop-hud-bar";
-    hud.style.gridColumn = "1 / -1";
-    hud.innerHTML = `
-      <span>${t("pop_round")}: <b>#${popBetState.round}</b></span>
-      <span>${t("pop_pot")}: <b style="color:var(--gold);">${popBetState.pot} 🪙</b></span>
-      <span>${t("pop_risk")}: ${stars}</span>
-    `;
+    hud.className = "pop-hud-bar"; hud.style.gridColumn = "1 / -1";
+    hud.innerHTML = `<span>${t("pop_round")}: <b>#${popBetState.round}</b></span><span>${t("pop_pot")}: <b style="color:var(--gold);">${popBetState.pot} 🪙</b></span>`;
     box.appendChild(hud);
 
     if (popBetState.phase === "playing") {
-      const timerWrap = document.createElement("div");
-      timerWrap.className = "pop-timer-wrap";
-      timerWrap.innerHTML = `
-        <div id="popTimerHead" class="pop-timer-head"><span>${t("pop_time")}</span><span id="popTimerText">6.0s</span></div>
-        <div class="pop-timer-track"><div id="popTimerFill" class="pop-timer-fill"></div></div>
-      `;
-      box.appendChild(timerWrap);
+      const tw = document.createElement("div");
+      tw.className = "pop-timer-wrap";
+      tw.innerHTML = `<div id="popTimerHead" class="pop-timer-head"><span>${t("pop_time")}</span><span id="popTimerText">6.0s</span></div><div class="pop-timer-track"><div id="popTimerFill" class="pop-timer-fill"></div></div>`;
+      box.appendChild(tw);
     }
 
-    const revealNums = popBetState.phase === "decision" || popBetState.phase === "lost";
+    const reveal = popBetState.phase === "decision" || popBetState.phase === "lost";
     const maxFav = Math.max(popBetState.pair[0]?.favorites || 0, popBetState.pair[1]?.favorites || 0);
-
     popBetState.pair.forEach((ch, idx) => {
       const other = popBetState.pair[1 - idx];
       const fallback = makeFallbackSvg(ch.name, ch.rarity);
-      const hlClass = revealNums ? (ch.favorites >= maxFav ? " win-hl" : " lose-hl") : "";
-
       const card = document.createElement("div");
-      card.className = "pop-card" + hlClass;
-      card.innerHTML = `
-        ${revealNums ? `<div class="pop-fav-badge">❤️ ${ch.favorites.toLocaleString()}</div>` : ""}
-        <img src="${ch.image}" alt="${ch.name}" onerror="this.onerror=null;this.src='${fallback}'" />
-        <div class="pop-card-info"><h4>${ch.name}</h4><p class="muted-text">${ch.anime}</p></div>
-      `;
-
+      card.className = "pop-card" + (reveal ? (ch.favorites >= maxFav ? " win-hl" : " lose-hl") : "");
+      card.innerHTML = `${reveal ? `<div class="pop-fav-badge">❤️ ${ch.favorites.toLocaleString()}</div>` : ""}<img src="${ch.image}" alt="${ch.name}" onerror="this.onerror=null;this.src='${fallback}'" /><div class="pop-card-info"><h4>${ch.name}</h4><p class="muted-text">${ch.anime}</p></div>`;
       if (popBetState.phase === "playing") {
         card.addEventListener("click", () => {
           stopPopTimer();
-          if (ch.favorites >= other.favorites) {
-            popBetState.phase = "decision";
-            playSfx("win");
-            renderPopularityGame();
-          } else {
-            popBetState.phase = "lost";
-            showToast(t("pop_lost"));
-            renderPopularityGame();
-            setTimeout(() => { popBetState.phase = "bet"; renderPopularityGame(); }, 1600);
-          }
+          if (ch.favorites >= other.favorites) { popBetState.phase = "decision"; playSfx("win"); renderPopularityGame(); }
+          else { popBetState.phase = "lost"; showToast(t("pop_lost")); renderPopularityGame(); setTimeout(() => { popBetState.phase = "bet"; renderPopularityGame(); }, 1600); }
         });
       }
       box.appendChild(card);
@@ -1693,120 +1561,85 @@
 
     if (popBetState.phase === "decision") {
       const dec = document.createElement("div");
-      dec.className = "pop-decision-box";
-      dec.style.gridColumn = "1 / -1";
+      dec.className = "pop-decision-box"; dec.style.gridColumn = "1 / -1";
       const bonusGems = popBetState.round >= 2 ? popBetState.round - 1 : 0;
-      dec.innerHTML = `
-        <button id="btnPopCashout" class="btn-cashout">${t("pop_cashout")} (+${popBetState.pot} 🪙${bonusGems ? ` +${bonusGems} 💎` : ""})</button>
-        <button id="btnPopDouble" class="btn-double">${t("pop_double")} (${popBetState.pot * 2} 🪙)</button>
-      `;
+      dec.innerHTML = `<button id="btnPopCashout" class="btn-cashout">${t("pop_cashout")} (+${popBetState.pot} 🪙)</button><button id="btnPopDouble" class="btn-double">${t("pop_double")} (${popBetState.pot * 2} 🪙)</button>`;
       box.appendChild(dec);
-
       document.getElementById("btnPopCashout").addEventListener("click", () => {
-        state.gold += popBetState.pot;
-        if (bonusGems > 0) state.gems += bonusGems;
-        saveState();
-        updateHud();
-        playSfx("win");
-        showToast(`${t("pop_cashed")} +${popBetState.pot} 🪙${bonusGems ? ` | +${bonusGems} 💎` : ""}`);
-        popBetState.phase = "bet";
-        renderPopularityGame();
+        state.gold += popBetState.pot; if (bonusGems > 0) state.gems += bonusGems;
+        saveState(); updateHud(); playSfx("win"); showToast(t("pop_cashed"));
+        popBetState.phase = "bet"; renderPopularityGame();
       });
-
       document.getElementById("btnPopDouble").addEventListener("click", () => {
-        popBetState.round += 1;
-        popBetState.pot *= 2;
-        popBetState.phase = "playing";
+        popBetState.round++; popBetState.pot *= 2; popBetState.phase = "playing";
         popBetState.pair = pickDifficultyScaledPair(popBetState.round);
-        playSfx("click");
-        renderPopularityGame();
-        startPopTimer();
+        playSfx("click"); renderPopularityGame(); startPopTimer();
       });
     }
   }
-
-  function loadNextPopularityDuel() {
-    stopPopTimer();
-    popBetState.phase = "bet";
-    renderPopularityGame();
-  }
   /* =========================================================
-     14. النزالات أونلاين بواجهة البطاقات الداكنة (1 ضد 1 عبر Firebase)
+     13. النزالات أونلاين (معاينة 10ث + خلط سريع 15ث + الرهانات)
   ========================================================= */
   let selectedDuelMode = "safe";
+  let selectedGemsStake = 30;
   let selectedStakeCardUid = "";
   let currentRoomCode = null;
   let currentRole = null;
   let roomListenerRef = null;
   let onlinePreviewStartedFor = null;
+  let activeShuffleInterval = null;
+  let activePreviewTimer = null;
   let rewardedRooms = new Set();
+
+  window.selectGemsStake = function (val, btn) {
+    selectedGemsStake = val;
+    document.querySelectorAll("[data-gem-stake]").forEach((b) => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+  };
 
   function populateMyStakeCardsRow() {
     const row = document.getElementById("myStakeCardsRow");
     if (!row) return;
     const rares = state.inventory.filter((c) => LIMITED_CAPS[c.rarity]);
-
-    if (rares.length === 0) {
+    if (!rares.length) {
       selectedStakeCardUid = "";
       row.innerHTML = `<p class="muted-text" style="padding:6px;">${t("msg_no_rares_stake")}</p>`;
       return;
     }
-
-    if (!rares.some((c) => c.uidCard === selectedStakeCardUid)) {
-      selectedStakeCardUid = rares[0].uidCard;
-    }
-
+    if (!rares.some((c) => c.uidCard === selectedStakeCardUid)) selectedStakeCardUid = rares[0].uidCard;
     row.innerHTML = "";
     rares.forEach((c) => {
       const item = document.createElement("div");
       item.className = "stake-mini-card" + (c.uidCard === selectedStakeCardUid ? " selected" : "");
-      const fallback = makeFallbackSvg(c.name, c.rarity);
-      item.innerHTML = `
-        <img src="${c.image}" alt="${c.name}" onerror="this.onerror=null;this.src='${fallback}'" />
-        <span>${c.rarity} #${c.serial}</span>
-        <span>${c.name}</span>
-      `;
-      item.addEventListener("click", () => {
-        selectedStakeCardUid = c.uidCard;
-        playSfx("click");
-        populateMyStakeCardsRow();
-      });
+      item.innerHTML = `<img src="${c.image}" alt="${c.name}" /><span>${c.rarity} #${c.serial || 1}</span><span>${c.name}</span>`;
+      item.addEventListener("click", () => { selectedStakeCardUid = c.uidCard; playSfx("click"); populateMyStakeCardsRow(); });
       row.appendChild(item);
     });
   }
 
   async function createOnlineRoom() {
     if (!db || !navigator.onLine) return showToast("⚠️ Offline!");
-    if (characterCatalog.size < 6) {
-      await ensureRichCatalog();
-      if (characterCatalog.size < 6) return showToast("⏳ Loading...");
-    }
-
+    if (characterCatalog.size < 6) await ensureRichCatalog();
     const duelType = selectedDuelMode;
+    const goldStake = duelType === "safe" ? Math.max(0, Math.floor(Number(document.getElementById("inputGoldStake")?.value) || 0)) : 0;
+    const gemsStake = duelType === "stake_gems" ? selectedGemsStake : 0;
     let stakeCard = null;
 
-    if (duelType === "stake_gems" && state.gems < 30) {
-      return showToast(t("msg_no_gems"));
-    }
+    if (duelType === "safe" && goldStake > 0 && state.gold < goldStake) return showToast(t("msg_no_gold"));
+    if (duelType === "stake_gems" && state.gems < gemsStake) return showToast(t("msg_no_gems"));
     if (duelType === "stake_card") {
       stakeCard = state.inventory.find((c) => c.uidCard === selectedStakeCardUid) || null;
       if (!stakeCard) return showToast(t("msg_no_rares_stake"));
     }
 
     const code = String(Math.floor(1000 + Math.random() * 9000));
-    const boardCards = pickSixUniqueRarityCards().map((c) => ({
-      id: c.id, name: c.name, image: c.image, rarity: c.rarity
-    }));
-
+    const boardCards = pickSixUniqueRarityCards().map((c) => ({ id: c.id, name: c.name, image: c.image, rarity: c.rarity }));
     await db.ref(`duels/${code}`).set({
-      code, duelType, status: "waiting", turn: "p1",
-      cards: boardCards,
-      picked: ["", "", "", "", "", ""],
-      p1: { uid: state.uid, name: state.name, consent: duelType === "safe", stakeCard },
-      p2: null,
-      createdAt: Date.now()
+      code, duelType, goldStake, gemsStake, status: "waiting", turn: "p1",
+      cards: boardCards, picked: ["", "", "", "", "", ""],
+      p1: { uid: state.uid, name: state.name, consent: false, stakeCard },
+      p2: null, createdAt: Date.now()
     });
-
     attachToRoom(code, "p1");
     showToast(`✅ ${t("lbl_room_code")}: ${code}`);
   }
@@ -1815,40 +1648,38 @@
     const code = (codeInput || document.getElementById("inputRoomCode").value).trim();
     if (!/^\d{4}$/.test(code)) return showToast("⚠️ 4-digit code!");
     if (!db || !navigator.onLine) return showToast("⚠️ Offline!");
-
     const snap = await db.ref(`duels/${code}`).get();
     if (!snap.exists()) return showToast("❌ Room not found!");
-
     const room = snap.val();
     if (room.p1?.uid === state.uid) { attachToRoom(code, "p1"); return; }
     if (room.p2 && room.p2.uid !== state.uid) return showToast("⚠️ Room full!");
 
+    const reqGold = Number(room.goldStake) || 0;
+    const reqGems = Number(room.gemsStake) || 30;
     let p2StakeCard = null;
-    if (room.duelType === "stake_gems" && state.gems < 30) return showToast(t("msg_no_gems"));
+    if (room.duelType === "safe" && reqGold > 0 && state.gold < reqGold) return showToast(t("msg_no_gold"));
+    if (room.duelType === "stake_gems" && state.gems < reqGems) return showToast(t("msg_no_gems"));
     if (room.duelType === "stake_card") {
-      const reqRarity = room.p1?.stakeCard?.rarity;
-      p2StakeCard = state.inventory.find((c) => c.rarity === reqRarity) || null;
-      if (!p2StakeCard) return showToast(`⚠️ Requires ${reqRarity} card!`);
+      const reqR = room.p1?.stakeCard?.rarity;
+      p2StakeCard = state.inventory.find((c) => c.rarity === reqR) || null;
+      if (!p2StakeCard) return showToast(`⚠️ Requires ${reqR} card!`);
     }
 
-    const nextStatus = room.duelType === "safe" ? "preview" : "consent";
+    const needsConsent = room.duelType !== "safe" || reqGold > 0;
     await db.ref(`duels/${code}`).update({
-      status: nextStatus,
-      p2: { uid: state.uid, name: state.name, consent: room.duelType === "safe", stakeCard: p2StakeCard }
+      status: needsConsent ? "consent" : "preview",
+      p2: { uid: state.uid, name: state.name, consent: !needsConsent, stakeCard: p2StakeCard }
     });
-
     attachToRoom(code, "p2");
   }
 
   function attachToRoom(code, role) {
     leaveCurrentRoom(false);
-    currentRoomCode = code;
-    currentRole = role;
-
+    currentRoomCode = code; currentRole = role;
+    onlinePreviewStartedFor = null;
     document.getElementById("roomSetupBox").classList.add("hidden");
     document.getElementById("activeDuelBox").classList.remove("hidden");
     document.getElementById("activeRoomCode").textContent = code;
-
     roomListenerRef = db.ref(`duels/${code}`);
     roomListenerRef.on("value", (snap) => {
       if (!snap.exists()) { leaveCurrentRoom(false); return; }
@@ -1857,1001 +1688,38 @@
   }
 
   function leaveCurrentRoom(removeFromDb = true) {
+    if (activePreviewTimer) { clearInterval(activePreviewTimer); activePreviewTimer = null; }
+    if (activeShuffleInterval) { clearInterval(activeShuffleInterval); activeShuffleInterval = null; }
     if (roomListenerRef) { roomListenerRef.off(); roomListenerRef = null; }
-    if (removeFromDb && currentRoomCode && db) {
-      db.ref(`duels/${currentRoomCode}`).remove().catch(() => {});
-    }
-    currentRoomCode = null;
-    currentRole = null;
+    if (removeFromDb && currentRoomCode && db) db.ref(`duels/${currentRoomCode}`).remove().catch(() => {});
+    currentRoomCode = null; currentRole = null; onlinePreviewStartedFor = null;
     document.getElementById("activeDuelBox").classList.add("hidden");
     document.getElementById("roomSetupBox").classList.remove("hidden");
   }
 
-  function renderOnlineRoomState(room) {
-    document.getElementById("p1NameLabel").textContent = room.p1?.name || "P1";
-    document.getElementById("p2NameLabel").textContent = room.p2?.name || t("msg_waiting_opp");
-
-    const modeTags = {
-      safe: "🛡️ " + t("mode_safe_title"),
-      stake_gems: "💎 " + t("mode_gems_title"),
-      stake_card: "🔥 " + t("mode_card_title")
-    };
-    document.getElementById("activeDuelModeTag").textContent = modeTags[room.duelType] || "⚔️";
-
-    document.getElementById("p1StakeLabel").textContent = room.p1?.stakeCard
-      ? `${room.p1.stakeCard.name} (${room.p1.stakeCard.rarity})`
-      : room.duelType === "stake_gems" ? "30 💎" : "✓";
-
-    document.getElementById("p2StakeLabel").textContent = room.p2
-      ? (room.p2.stakeCard ? `${room.p2.stakeCard.name} (${room.p2.stakeCard.rarity})` : room.duelType === "stake_gems" ? "30 💎" : "✓")
-      : "---";
-
-    const consentBar = document.getElementById("mutualConsentBar");
-    const statusBanner = document.getElementById("onlineDuelStatus");
-
-    if (room.status === "waiting") {
-      consentBar.classList.add("hidden");
-      statusBanner.textContent = `${t("lbl_room_code")}: ${room.code} — ${t("msg_waiting_opp")}`;
-      renderOnlineBoard(room, false);
-      return;
-    }
-
-    if (room.status === "consent") {
-      consentBar.classList.remove("hidden");
-      statusBanner.textContent = t("consent_warn");
-      if (room.p1?.consent && room.p2?.consent && currentRole === "p1") {
-        db.ref(`duels/${room.code}/status`).set("preview");
-      }
-      renderOnlineBoard(room, false);
-      return;
-    }
-
-    consentBar.classList.add("hidden");
-
-    if (room.status === "preview") {
-      statusBanner.textContent = t("msg_memorize");
-      renderOnlineBoard(room, true);
-      if (currentRole === "p1" && onlinePreviewStartedFor !== room.code) {
-        onlinePreviewStartedFor = room.code;
-        setTimeout(() => {
-          const shuffled = [...room.cards].sort(() => Math.random() - 0.5);
-          db.ref(`duels/${room.code}`).update({ cards: shuffled, status: "playing", turn: "p1" });
-        }, 3200);
-      }
-      return;
-    }
-
-    if (room.status === "playing") {
-      statusBanner.textContent = room.turn === currentRole ? t("msg_your_turn") : t("msg_opp_turn");
-      renderOnlineBoard(room, false);
-      return;
-    }
-
-    if (room.status === "finished") {
-      renderOnlineBoard(room, true);
-      finalizeOnlineMatchRewards(room);
-    }
-  }
-
-  function renderOnlineBoard(room, revealAll) {
-    const board = document.getElementById("onlineBoard");
-    board.innerHTML = "";
-    const pickedArr = room.picked || ["", "", "", "", "", ""];
-
-    (room.cards || []).forEach((card, idx) => {
-      const owner = pickedArr[idx] || "";
-      const showFace = revealAll || owner !== "";
-      const slot = document.createElement("div");
-      slot.className = "duel-slot";
-      const borderCls = owner === currentRole ? " picked-me" : owner !== "" ? " picked-opp" : "";
-      const fallback = makeFallbackSvg(card.name, card.rarity);
-
-      slot.innerHTML = showFace
-        ? `<div class="duel-card-inner${borderCls}">
-             <img src="${card.image}" alt="${card.name}" onerror="this.onerror=null;this.src='${fallback}'" />
-             <span class="card-rarity-pill r-${card.rarity}">${card.rarity}</span>
-             <div class="card-bottom-label">${card.name}</div>
-           </div>`
-        : `<div class="duel-card-inner face-down"></div>`;
-
-      slot.addEventListener("click", () => handleOnlineCardPick(room, idx));
-      board.appendChild(slot);
-    });
-  }
-
-  async function handleOnlineCardPick(room, idx) {
-    if (room.status !== "playing" || room.turn !== currentRole) return;
-    const picked = [...(room.picked || ["", "", "", "", "", ""])];
-    if (picked[idx]) return;
-
-    playSfx("click");
-    picked[idx] = currentRole;
-
-    const p1Count = picked.filter((x) => x === "p1").length;
-    const p2Count = picked.filter((x) => x === "p2").length;
-
-    if (p1Count + p2Count === 6) {
-      await db.ref(`duels/${room.code}`).update({ picked, status: "finished" });
-      return;
-    }
-
-    let nextTurn = room.turn;
-    if (p1Count === 1 && p2Count === 0) nextTurn = "p2";
-    else if (p1Count === 1 && p2Count === 2) nextTurn = "p1";
-    else if (p1Count === 3 && p2Count === 2) nextTurn = "p2";
-
-    await db.ref(`duels/${room.code}`).update({ picked, turn: nextTurn });
-  }
-
-  async function finalizeOnlineMatchRewards(room) {
-    if (rewardedRooms.has(room.code)) return;
-    rewardedRooms.add(room.code);
-
-    const picked = room.picked || [];
-    let p1Score = 0, p2Score = 0;
-    room.cards.forEach((c, i) => {
-      const p = RANK_POWER[c.rarity] || 1;
-      if (picked[i] === "p1") p1Score += p;
-      else if (picked[i] === "p2") p2Score += p;
-    });
-
-    const winnerRole = p1Score >= p2Score ? "p1" : "p2";
-    const iWon = winnerRole === currentRole;
-    const statusBanner = document.getElementById("onlineDuelStatus");
-
-    if (iWon) {
-      state.trophies += 25;
-      state.gold += 300;
-      state.gems += 5;
-
-      if (room.duelType === "stake_gems") {
-        state.gems += 30;
-      } else if (room.duelType === "stake_card") {
-        const wonCard = currentRole === "p1" ? room.p2?.stakeCard : room.p1?.stakeCard;
-        if (wonCard) {
-          wonCard.acquiredAt = Date.now();
-          state.inventory.push(wonCard);
-          state.shieldUntil = Date.now() + DAY_MS;
-          if (db && wonCard.serial) {
-            await db.ref(`limitedCards/${wonCard.charId}/owners/${wonCard.serial}`).set({
-              uid: state.uid, name: state.name, claimedAt: Date.now(), lastActiveAt: Date.now()
-            });
-          }
-          showToast(`👑 +${wonCard.name} (🛡️ 24h)`);
-        }
-      }
-
-      playSfx("win");
-      statusBanner.textContent = `${t("msg_win")} (${p1Score} - ${p2Score}) +25 🏆`;
-    } else {
-      state.trophies = Math.max(0, state.trophies - 10);
-      if (room.duelType === "stake_gems") state.gems = Math.max(0, state.gems - 30);
-      else if (room.duelType === "stake_card") {
-        const lostCard = currentRole === "p1" ? room.p1?.stakeCard : room.p2?.stakeCard;
-        if (lostCard) {
-          state.inventory = state.inventory.filter((c) => c.uidCard !== lostCard.uidCard);
-          showToast(`-${lostCard.name}`);
-        }
-      }
-      statusBanner.textContent = `${t("msg_lose")} (${p1Score} - ${p2Score})`;
-    }
-
-    saveState();
-    updateHud();
-    renderInventory(true);
-    populateMyStakeCardsRow();
-  }
-
-  /* =========================================================
-     15. التنقل، الأحداث، والإقلاع الفوري
-  ========================================================= */
-  function switchMainTab(tabId) {
-    stopPopTimer();
-    document.querySelectorAll(".tab-view").forEach((v) => v.classList.remove("active"));
-    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
-    document.getElementById(tabId)?.classList.add("active");
-    document.querySelector(`.nav-btn[data-tab="${tabId}"]`)?.classList.add("active");
-
-    if (tabId === "viewCards") renderInventory(false);
-    if (tabId === "viewCodex") renderCodex();
-    if (tabId === "viewOnline") populateMyStakeCardsRow();
-    if (tabId === "viewArena") {
-      const popActive = document.getElementById("soloPopPane")?.classList.contains("active");
-      if (popActive) renderPopularityGame();
-    }
-  }
-
-  function switchOnlineSubTab(paneKey) {
-    document.querySelectorAll("#viewOnline .sub-tab").forEach((b) => {
-      b.classList.toggle("active", b.dataset.online === paneKey);
-    });
-    document.querySelectorAll(".online-pane").forEach((p) => p.classList.remove("active"));
-    const map = { lobby: "onlineLobbyPane", challenges: "onlineChallengesPane", leaders: "onlineLeadersPane" };
-    document.getElementById(map[paneKey])?.classList.add("active");
-  }
-
-  function initStartScreenBackground() {
-    const bg = document.getElementById("startBgCards");
-    if (!bg) return;
-    const topChars = Array.from(characterCatalog.values()).slice(0, 9);
-    if (topChars.length === 0) return;
-    bg.innerHTML = topChars.map((c) => `<img src="${c.image}" alt="" />`).join("");
-  }
-
-  function bindAllEvents() {
-    document.getElementById("btnStartGame").addEventListener("click", () => {
-      document.getElementById("startScreen").classList.add("hidden");
-      document.getElementById("appShell").classList.remove("hidden");
-      updateBgmPlayback();
-      syncPlayerToCloud();
-      ensureRichCatalog();
-    });
-
-    document.querySelectorAll(".lang-chip").forEach((chip) => {
-      chip.addEventListener("click", () => applyLanguage(chip.dataset.lang));
-    });
-
-    document.querySelectorAll(".nav-btn").forEach((btn) => {
-      btn.addEventListener("click", () => switchMainTab(btn.dataset.tab));
-    });
-
-    document.querySelectorAll("#viewArena .sub-tab").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        stopPopTimer();
-        document.querySelectorAll("#viewArena .sub-tab").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        document.querySelectorAll(".solo-pane").forEach((p) => p.classList.remove("active"));
-        const map = { shuffle: "soloShufflePane", trivia: "soloTriviaPane", pop: "soloPopPane" };
-        document.getElementById(map[btn.dataset.solo])?.classList.add("active");
-        if (btn.dataset.solo === "trivia") loadNextTriviaQuestion();
-        if (btn.dataset.solo === "pop") loadNextPopularityDuel();
-      });
-    });
-
-    document.querySelectorAll(".diff-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".diff-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        soloDiff = btn.dataset.diff;
-      });
-    });
-    document.getElementById("btnStartSoloShuffle").addEventListener("click", startSoloShuffleDuel);
-
-    document.querySelectorAll(".trivia-mode-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".trivia-mode-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        triviaMode = btn.dataset.tmode;
-        loadNextTriviaQuestion();
-      });
-    });
-
-    document.getElementById("btnTrivia5050").addEventListener("click", () => {
-      const wrongBtns = Array.from(document.querySelectorAll("#triviaOptions .opt-btn"))
-        .filter((b) => Number(b.dataset.id) !== currentTriviaAnswer?.id && !b.classList.contains("eliminated"));
-      wrongBtns.slice(0, 2).forEach((b) => b.classList.add("eliminated"));
-    });
-    document.getElementById("btnTriviaSkip").addEventListener("click", loadNextTriviaQuestion);
-
-    document.querySelectorAll("#viewOnline .sub-tab").forEach((btn) => {
-      btn.addEventListener("click", () => switchOnlineSubTab(btn.dataset.online));
-    });
-
-    document.querySelectorAll("#duelModeCards .duel-mode-card").forEach((cardBtn) => {
-      cardBtn.addEventListener("click", () => {
-        document.querySelectorAll("#duelModeCards .duel-mode-card").forEach((c) => c.classList.remove("active"));
-        cardBtn.classList.add("active");
-        selectedDuelMode = cardBtn.dataset.mode;
-        playSfx("click");
-        const picker = document.getElementById("myStakeCardPicker");
-        picker.classList.toggle("hidden", selectedDuelMode !== "stake_card");
-        if (selectedDuelMode === "stake_card") populateMyStakeCardsRow();
-      });
-    });
-
-    document.getElementById("btnCreateRoom").addEventListener("click", createOnlineRoom);
-    document.getElementById("btnJoinRoom").addEventListener("click", () => joinOnlineRoom());
-    document.getElementById("btnLeaveRoom").addEventListener("click", () => leaveCurrentRoom(true));
-
-    document.getElementById("btnConfirmConsent").addEventListener("click", () => {
-      if (db && currentRoomCode && currentRole) {
-        db.ref(`duels/${currentRoomCode}/${currentRole}/consent`).set(true);
-        showToast("✅");
-      }
-    });
-    document.getElementById("btnDeclineConsent").addEventListener("click", () => leaveCurrentRoom(true));
-
-    document.getElementById("invSearch").addEventListener("input", (e) => {
-      invSearchQuery = e.target.value;
-      renderInventory(true);
-    });
-    document.querySelectorAll("#invRarityFilters .r-chip").forEach((chip) => {
-      chip.addEventListener("click", () => {
-        document.querySelectorAll("#invRarityFilters .r-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        invFilterRarity = chip.dataset.r;
-        renderInventory(true);
-      });
-    });
-    document.getElementById("btnLoadMoreInv").addEventListener("click", () => {
-      invRenderLimit += 30;
-      renderInventory(false);
-    });
-
-    let codexSearchTimer = null;
-    document.getElementById("codexSearch").addEventListener("input", (e) => {
-      codexSearch = e.target.value;
-      renderCodex();
-      const q = codexSearch.trim();
-      clearTimeout(codexSearchTimer);
-      if (q.length >= 2 && navigator.onLine) {
-        codexSearchTimer = setTimeout(async () => {
-          await fetchAniListPage(1, q);
-          renderCodex();
-        }, 500);
-      }
-    });
-    document.querySelectorAll("#codexRarityFilters .r-chip").forEach((chip) => {
-      chip.addEventListener("click", () => {
-        document.querySelectorAll("#codexRarityFilters .r-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        codexFilter = chip.dataset.cr;
-        renderCodex();
-      });
-    });
-
-    document.getElementById("btnCloseSummon").addEventListener("click", () => {
-      document.getElementById("summonModal").classList.add("hidden");
-    });
-    document.getElementById("btnCloseCardModal").addEventListener("click", () => {
-      document.getElementById("cardModal").classList.add("hidden");
-    });
-    document.getElementById("btnSettings").addEventListener("click", () => {
-      updateHud();
-      document.getElementById("settingsModal").classList.remove("hidden");
-    });
-    document.getElementById("btnProfileHud").addEventListener("click", () => {
-      updateHud();
-      document.getElementById("settingsModal").classList.remove("hidden");
-    });
-    document.getElementById("btnCloseSettings").addEventListener("click", () => {
-      document.getElementById("settingsModal").classList.add("hidden");
-    });
-
-    document.getElementById("btnSavePlayerName").addEventListener("click", () => {
-      const val = document.getElementById("inputPlayerName").value.trim();
-      if (val.length >= 2) {
-        state.name = val;
-        saveState();
-        updateHud();
-        showToast(t("msg_saved"));
-      }
-    });
-
-    document.getElementById("btnAudioToggle").addEventListener("click", () => {
-      state.bgmEnabled = !state.bgmEnabled;
-      document.getElementById("chkBgm").checked = state.bgmEnabled;
-      saveState();
-      updateBgmPlayback();
-    });
-    document.getElementById("chkBgm").addEventListener("change", (e) => {
-      state.bgmEnabled = e.target.checked;
-      saveState();
-      updateBgmPlayback();
-    });
-    document.getElementById("chkSfx").addEventListener("change", (e) => {
-      state.sfxEnabled = e.target.checked;
-      saveState();
-    });
-
-    window.addEventListener("online", () => { updateHud(); ensureRichCatalog(); });
-    window.addEventListener("offline", updateHud);
-  }
-
-  loadCaches();
-  initStartScreenBackground();
-  applyLanguage(state.lang);
-  bindAllEvents();
-  initFirebaseListeners();
-  ensureRichCatalog();
-    /* =========================================================
-     إضافة إصلاح تصنيف SP/UR وإنقاص النسخ في النوادر (Fix v6)
-  ========================================================= */
-  (function applySpUrAndCopiesFix() {
-    const TRUE_SP_RE = /\b(goku|gokuu|saitama|gojo|gojou|sukuna|jin-?woo|jin-?u seong|luffy|madara|hashirama|naruto|sasuke|aizen|ichigo|yhwach|yamamoto|rimuru|anos|gilgamesh|beerus|whis|zeno|newgate|whitebeard|shanks|kaido|yoriichi|meruem|netero|alucard|ainz|giorno|shigeo|mob|reinhard|guts|sinbad|simon|anti-spiral|jin mori|kaguya|isshiki(?!\s*iroha)|iroha(?!\s*isshiki))\b/i;
-
-    // استثناء صريح لشخصية Iroha Isshiki من أي رتبة عليا
-    const BLOCK_SP_UR_RE = /\b(iroha\s*isshiki|isshiki\s*iroha)\b/i;
-
-    const TRUE_UR_RE = /\b(vegeta|gohan|broly|frieza|piccolo|zoro|mihawk|trafalgar|doflamingo|ace|sabo|garp|itachi|minato|kakashi|pain|nagato|obito|jiraiya|levi|eren|mikasa|kenpachi|byakuya|ulquiorra|hitsugaya|toji|yuta|geto|killua|hisoka|chrollo|kurapika|gon|lelouch|l lawliet|light yagami|roy mustang|edward elric|muzan|kokushibo|akaza|rengoku|tanjiro|garou|tatsumaki|escanor|meliodas|ban|dio|jotaro|kaneki|all might|midoriya|bakugou|bakugo|todoroki|griffith|thorfinn|erwin|shikamaru|dazai|chuuya|saber|artoria|archer|emiya|frieren|makima|denji|esdeath|akame|erza|natsu|yami|asta|yujiro|baki|spike spiegel|gintoki|kamina|shinra|musashi)\b/i;
-
-    function strictFixRarity(ch) {
-      const name = String(ch.name || "");
-      const anime = String(ch.anime || "");
-      const favs = Number(ch.favorites || 0);
-      const genres = Array.isArray(ch.genres) ? ch.genres : [];
-
-      if (BLOCK_SP_UR_RE.test(name)) {
-        return favs >= 2000 ? "C" : "N";
-      }
-      if (TRUE_SP_RE.test(name) && !/darling in the franxx/i.test(anime)) {
-        return "SP";
-      }
-      if (TRUE_UR_RE.test(name)) {
-        return "UR";
-      }
-
-      const isBlocked = typeof NON_COMBAT_ANIME_RE !== "undefined" && NON_COMBAT_ANIME_RE.test(anime);
-      const isCombat = !isBlocked && (genres.length === 0 ? favs >= 6500 : genres.some((g) => ["Action", "Adventure", "Fantasy", "Supernatural", "Sci-Fi", "Mecha"].includes(g)));
-
-      if (isCombat) {
-        if (favs >= 9000) return "SSR";
-        if (favs >= 3200) return "SR";
-        if (favs >= 1100) return "R";
-        if (favs >= 350) return "C";
-        return "N";
-      }
-      if (favs >= 10000) return "SR";
-      if (favs >= 3500) return "R";
-      if (favs >= 900) return "C";
-      return "N";
-    }
-
-    // إعادة تصنيف الكتالوج والمخزون بالكامل وتصحيح أي نسخ قديمة
-    characterCatalog.forEach((ch) => {
-      ch.rarity = strictFixRarity(ch);
-    });
-    saveCharCache();
-
-    let invModified = false;
-    state.inventory.forEach((card) => {
-      const cat = characterCatalog.get(Number(card.charId));
-      const newRarity = strictFixRarity({
-        name: card.name,
-        anime: card.anime,
-        favorites: card.favorites || cat?.favorites || 0,
-        genres: cat?.genres || []
-      });
-      if (card.rarity !== newRarity) {
-        card.rarity = newRarity;
-        invModified = true;
-      }
-      if (LIMITED_CAPS[newRarity]) {
-        if (!card.serial || !card.maxCopies || card.maxCopies !== LIMITED_CAPS[newRarity]) {
-          card.maxCopies = LIMITED_CAPS[newRarity];
-          card.serial = card.serial || 1;
-          invModified = true;
-        }
-      } else if (card.serial || card.maxCopies) {
-        card.serial = null;
-        card.maxCopies = null;
-        invModified = true;
-      }
-    });
-    if (invModified) saveState();
-
-    // حساب النسخ المستخدمة فعلياً لبطاقة نادرة (السحابة + المخزون المحلي)
-    function computeUsedSlotsForChar(cid, maxCopies) {
-      const used = new Map();
-      const remoteOwners = limitedRegistry[cid]?.owners || {};
-      Object.entries(remoteOwners).forEach(([slot, ow]) => {
-        if (ow) used.set(String(slot), ow);
-      });
-      state.inventory.forEach((c) => {
-        if (Number(c.charId) === Number(cid) && LIMITED_CAPS[c.rarity]) {
-          let s = Number(c.serial) || 1;
-          if (s > maxCopies) s = 1;
-          while (used.has(String(s)) && used.get(String(s))?.uid !== state.uid && s < maxCopies) {
-            s++;
-          }
-          if (!c.serial) c.serial = s;
-          c.maxCopies = maxCopies;
-          used.set(String(s), { uid: state.uid, name: state.name, claimedAt: c.acquiredAt || Date.now(), lastActiveAt: Date.now() });
-        }
-      });
-      return used;
-    }
-
-    // إعادة رسم سجل النوادر بحيث ينقص عدد النسخ المتاحة فوراً عند امتلاك أي نسخة
-    renderCodex = function () {
-      const grid = document.getElementById("codexGrid");
-      const counterEl = document.getElementById("codexDiscoveredCount");
-      if (!grid) return;
-
-      const allLegends = Array.from(characterCatalog.values())
-        .filter((ch) => ch && LIMITED_CAPS[ch.rarity] && !BLOCK_SP_UR_RE.test(ch.name || ""))
-        .sort((a, b) => {
-          const diff = (RANK_POWER[b.rarity] || 0) - (RANK_POWER[a.rarity] || 0);
-          return diff !== 0 ? diff : (b.favorites || 0) - (a.favorites || 0);
-        });
-
-      if (counterEl) counterEl.textContent = allLegends.length;
-
-      const q = (codexSearch || "").trim().toLowerCase();
-      const filtered = allLegends.filter((c) => {
-        const okR = codexFilter === "ALL" || c.rarity === codexFilter;
-        const okQ = !q || c.name.toLowerCase().includes(q) || (c.anime || "").toLowerCase().includes(q);
-        return okR && okQ;
-      });
-
-      grid.innerHTML = "";
-      filtered.forEach((ch) => {
-        const max = LIMITED_CAPS[ch.rarity];
-        const usedMap = computeUsedSlotsForChar(ch.id, max);
-        const freeCount = Math.max(0, max - usedMap.size);
-        const fallback = makeFallbackSvg(ch.name, ch.rarity);
-
-        const card = document.createElement("div");
-        card.className = `codex-card tier-${ch.rarity}`;
-        card.innerHTML = `
-          <img class="codex-card-img" src="${ch.image}" alt="${ch.name}" loading="lazy" onerror="this.onerror=null;this.src='${fallback}'" />
-          <div class="inv-card-top">
-            <span class="card-rarity-pill r-${ch.rarity}">${ch.rarity}</span>
-            <span class="serial-tag">${freeCount}/${max}</span>
-          </div>
-          <div class="codex-card-body">
-            <h4>${ch.name}</h4>
-            <div class="anime-sub">${ch.anime || "Anime Legend"}</div>
-            <div class="codex-card-foot">
-              <span style="color:${freeCount > 0 ? "#4ade80" : "#fb7185"};">${t("lbl_free_slots")}: ${freeCount}/${max}</span>
-              <span style="color:var(--gold);">ℹ️</span>
-            </div>
-          </div>
-        `;
-        card.addEventListener("click", () => openCardDossierModal(ch, false));
-        grid.appendChild(card);
-      });
-
-      const moreWrap = document.createElement("div");
-      moreWrap.className = "codex-load-more";
-      moreWrap.innerHTML = `<button id="btnCodexMoreLive" class="secondary-btn full-w">${t("codex_more")}</button>`;
-      grid.appendChild(moreWrap);
-
-      document.getElementById("btnCodexMoreLive")?.addEventListener("click", async (e) => {
-        e.target.disabled = true;
-        e.target.textContent = t("codex_searching");
-        await fetchAniListPage(codexPageCursor++);
-        characterCatalog.forEach((c) => { c.rarity = strictFixRarity(c); });
-        renderCodex();
-      });
-    };
-
-    // تحديث عرض الملاك داخل ملف البطاقة أيضاً ليطابق النسخ المحجوزة
-    const prevOpenDossier = openCardDossierModal;
-    openCardDossierModal = async function (cardOrChar, isOwnedCard = false) {
-      await prevOpenDossier(cardOrChar, isOwnedCard);
-      const cid = Number(cardOrChar.charId || cardOrChar.id);
-      const cat = characterCatalog.get(cid) || cardOrChar;
-      const rarity = cat.rarity || cardOrChar.rarity || "R";
-      const max = LIMITED_CAPS[rarity];
-      if (!max) return;
-
-      const usedMap = computeUsedSlotsForChar(cid, max);
-      const freeCount = Math.max(0, max - usedMap.size);
-      const body = document.getElementById("cardModalBody");
-      const ownersSec = body?.querySelector(".dossier-owners-section");
-      if (!ownersSec) return;
-
-      let rowsHtml = `<div class="dossier-owner-row"><span>🛒 ${t("lbl_free_slots")}</span><b style="color:${freeCount > 0 ? "#4ade80" : "#fb7185"};">${freeCount} / ${max}</b></div>`;
-      usedMap.forEach((ow, slot) => {
-        const isMe = ow.uid === state.uid;
-        const btnHtml = !isMe
-          ? `<button class="danger-btn-sm btn-dossier-ch" data-cid="${cid}" data-slot="${slot}" data-ouid="${ow.uid}" data-oname="${ow.name}">${t("btn_challenge")}</button>`
-          : `<span class="status-badge">👑 ${t("lbl_you")}</span>`;
-        rowsHtml += `
-          <div class="dossier-owner-row">
-            <span>${isMe ? "👑 " + ow.name : "👤 " + ow.name} <small style="color:var(--gold);">#${slot}/${max}</small></span>
-            ${btnHtml}
-          </div>`;
-      });
-      ownersSec.innerHTML = rowsHtml;
-
-      ownersSec.querySelectorAll(".btn-dossier-ch").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          sendDirectChallenge(Number(btn.dataset.cid), Number(btn.dataset.slot), btn.dataset.ouid, btn.dataset.oname);
-          document.getElementById("cardModal").classList.add("hidden");
-        });
-      });
-    };
-
-    updateHud();
-    renderInventory(false);
-    renderCodex();
-  })();
-    /* =========================================================
-     إضافة تنظيف ملاك undefined وتصحيح ترتيب 1/3 (Fix v7)
-  ========================================================= */
-  (function fixUndefinedOwnersAndOrder() {
-    function isValidCloudOwner(ow) {
-      return Boolean(ow && typeof ow === "object" && ow.uid && typeof ow.name === "string" && ow.name.trim() && ow.name.trim().toLowerCase() !== "undefined");
-    }
-
-    // تنظيف أي ملاك غير صالحين من السجل المحلي ومن Firebase
-    Object.keys(limitedRegistry || {}).forEach((cid) => {
-      const entry = limitedRegistry[cid];
-      if (!entry || !entry.owners) return;
-      Object.keys(entry.owners).forEach((slot) => {
-        if (!isValidCloudOwner(entry.owners[slot])) {
-          delete entry.owners[slot];
-          if (db && navigator.onLine) {
-            db.ref(`limitedCards/${cid}/owners/${slot}`).remove().catch(() => {});
-          }
-        }
-      });
-    });
-
-    const prevOpen = openCardDossierModal;
-    openCardDossierModal = async function (cardOrChar, isOwnedCard = false) {
-      await prevOpen(cardOrChar, isOwnedCard);
-      const cid = Number(cardOrChar.charId || cardOrChar.id);
-      const cat = characterCatalog.get(cid) || cardOrChar;
-      const rarity = cat.rarity || cardOrChar.rarity || "R";
-      const max = LIMITED_CAPS[rarity];
-      if (!max) return;
-
-      const validOwners = new Map();
-      const remoteOwners = limitedRegistry[cid]?.owners || {};
-      Object.entries(remoteOwners).forEach(([slot, ow]) => {
-        if (isValidCloudOwner(ow)) validOwners.set(String(slot), ow);
-      });
-
-      state.inventory.forEach((c) => {
-        if (Number(c.charId) === cid && LIMITED_CAPS[c.rarity]) {
-          const s = String(c.serial || 1);
-          validOwners.set(s, { uid: state.uid, name: state.name });
-        }
-      });
-
-      const freeCount = Math.max(0, max - validOwners.size);
-      const body = document.getElementById("cardModalBody");
-      const ownersSec = body?.querySelector(".dossier-owners-section");
-      if (!ownersSec) return;
-
-      let rowsHtml = `
-        <div class="dossier-owner-row">
-          <span>🛒 ${t("lbl_free_slots")}</span>
-          <b dir="ltr" style="color:${freeCount > 0 ? "#4ade80" : "#fb7185"};">${freeCount} / ${max}</b>
-        </div>`;
-
-      validOwners.forEach((ow, slot) => {
-        const isMe = ow.uid === state.uid;
-        const btnHtml = !isMe
-          ? `<button class="danger-btn-sm btn-dossier-ch" data-cid="${cid}" data-slot="${slot}" data-ouid="${ow.uid}" data-oname="${ow.name}">${t("btn_challenge")}</button>`
-          : `<span class="status-badge">👑 ${t("lbl_you")}</span>`;
-        rowsHtml += `
-          <div class="dossier-owner-row">
-            <span>${isMe ? "👑 " + ow.name : "👤 " + ow.name} <small dir="ltr" style="color:var(--gold);">#${slot}/${max}</small></span>
-            ${btnHtml}
-          </div>`;
-      });
-
-      ownersSec.innerHTML = rowsHtml;
-      ownersSec.querySelectorAll(".btn-dossier-ch").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          sendDirectChallenge(Number(btn.dataset.cid), Number(btn.dataset.slot), btn.dataset.ouid, btn.dataset.oname);
-          document.getElementById("cardModal").classList.add("hidden");
-        });
-      });
-    };
-
-    renderCodex();
-  })();
-    /* =========================================================
-     إضافة القاموس الفوري، مؤقت الترجمة، وتوجيه اللاعب (Fix v8)
-  ========================================================= */
-  (function applyOfflineAndUxBoost() {
-    const INSTANT_BIO_DICT = {
-      "satoru gojo": {
-        ar: "أقوى ساحر جوجوتسو في عصره، يمتلك عيني الستة وتقنية اللامحدود التي تمنعه من اللمس وتتيح له توسع نطاق الفراغ اللامتناهي.",
-        fr: "Le plus puissant exorciste de son époque, détenteur des Six Yeux et de l'Infini qui bloque toute attaque.",
-        ja: "現代最強の呪術師。六眼と無下限呪術を操り、領域展開「無量空処」で相手を圧倒する。"
-      },
-      "ryomen sukuna": {
-        ar: "ملك اللعنات الأسطوري في عصر الجوجوتسو، يُعرف بقوته التدميرية الهائلة ومهارته القتالية المطلقة وضريبه الخبيث.",
-        fr: "Le Roi des Fléaux légendaire, redouté pour sa puissance destructrice absolue et son sanctuaire malveillant.",
-        ja: "呪いの王と称される伝説の存在。圧倒的な呪力量と領域展開「伏魔御廚子」で畏怖される。"
-      },
-      "sung jin-woo": {
-        ar: "ملك الظلال الذي ارتقى من أضعف صياد إلى قوة لا تُقهر قادر على إحياء جيش كامل من ظلال أعدائه.",
-        fr: "Le Monarque des Ombres, passé du chasseur le plus faible à une puissance souveraine capable de lever une armée d'ombres.",
-        ja: "最弱のハンターから影の君主へと覚醒した存在。倒した敵を影の兵士として使役する。"
-      },
-      "son goku": {
-        ar: "مقاتل سايان نشأ على الأرض ويعشق تحدي الأقوى باستمرار، يتجاوز حدوده عبر التحولات الفائقة والغريزة الفائقة.",
-        fr: "Guerrier Saiyan élevé sur Terre, toujours en quête d'adversaires plus forts et repoussant ses limites jusqu'à l'Ultra Instinct.",
-        ja: "地球育ちのサイヤ人戦士。強敵を求め続け、限界を超えて身勝手の極意へと到達する。"
-      },
-      "monkey d. luffy": {
-        ar: "قبطان قراصنة قبعة القش الساعي ليصبح ملك القراصنة، يمتلك قدرة فاكهة المطاط وإيقاعات القتال الحرة.",
-        fr: "Capitaine de l'équipage du Chapeau de Paille visant le titre de Roi des Pirates, doté des pouvoirs du fruit du caoutchouc.",
-        ja: "海賊王を目指す麦わらの一味の船長。ゴムゴムの実の能力と自由な戦闘スタイルで仲間を導く。"
-      },
-      "naruto uzumaki": {
-        ar: "نينجا من قرية الورق يحمل ثعلب الذيول التسعة بداخله، يسعى ليصبح الهوكاجي ويحمي رفاقه بإرادة لا تنكسر.",
-        fr: "Ninja du Village Caché des Feuilles portant le démon à neuf queues, déterminé à devenir Hokage et protéger ses amis.",
-        ja: "木ノ葉隠れの里の忍。九尾を宿し、火影となって仲間を守るという強い意志で道を切り開く。"
-      },
-      "sasuke uchiha": {
-        ar: "من آخر ناجي عشيرة الأوتشيها، يجمع بين سرعة البرق وقوة الشارينغان والرينيغان في مبارزات دقيقة وحاسمة.",
-        fr: "Survivant du clan Uchiwa alliant vitesse de la foudre, Sharingan et Rinnegan dans des duels redoutables.",
-        ja: "うちは一族の生き残り。写輪眼と輪廻眼、雷遁の鋭い剣技を操る実力者。"
-      },
-      "levi ackerman": {
-        ar: "أقوى جندي في البشرية ضمن فيلق الاستطلاع، معروف بدقته الخاطفة ومناوراته الجوية السريعة ضد العمالقة.",
-        fr: "Le soldat le plus fort de l'humanité au sein du Bataillon d'exploration, célèbre pour sa rapidité et sa précision.",
-        ja: "調査兵団の「人類最強の兵士」。立体機動装置による高速かつ精密な斬撃で巨人を討つ。"
-      }
-    };
-
-    const prevGetBio = getTranslatedBio;
-    getTranslatedBio = async function (charObj) {
-      const lang = state.lang || "ar";
-      const keyName = String(charObj?.name || "").toLowerCase().trim();
-      if (lang !== "en") {
-        for (const [k, dict] of Object.entries(INSTANT_BIO_DICT)) {
-          if (keyName.includes(k) && dict[lang]) return dict[lang];
-        }
-      }
-      // مؤقت 2.5 ثانية حتى لا تتعطل الواجهة أبداً عند بطء الشبكة
-      return Promise.race([
-        prevGetBio(charObj),
-        new Promise((resolve) => setTimeout(() => resolve(charObj.bioEn || `${charObj.name} — ${charObj.anime}`), 2500))
-      ]);
-    };
-
-    // إضافة سطر توجيه سريع وواضح في رأس الساحة الفردية دون تغيير هيكلي
-    const arenaPane = document.getElementById("soloShufflePane");
-    if (arenaPane && !document.getElementById("quickGuideBanner")) {
-      const tip = document.createElement("p");
-      tip.id = "quickGuideBanner";
-      tip.className = "muted-text";
-      tip.style.cssText = "margin-bottom:10px;padding:8px 10px;background:rgba(245,197,66,0.07);border-radius:10px;border:1px solid rgba(245,197,66,0.2);";
-      const guideText = {
-        ar: "💡 احفظ مواقع البطاقات قبل الخلط، ثم اختر 3 بطاقات لتتفوق على الخصم.",
-        en: "💡 Memorize the cards before shuffling, then pick 3 cards to outscore your rival.",
-        fr: "💡 Mémorise les cartes avant le mélange, puis choisis 3 cartes pour battre l'adversaire.",
-        ja: "💡 シャッフル前に位置を覚え、3枚のカードを選んで相手より高いスコアを狙おう。"
-      };
-      tip.textContent = guideText[state.lang] || guideText.ar;
-      arenaPane.querySelector(".panel-card")?.prepend(tip);
-    }
-  })();
-  /* === إضافة رهان الذهب + خيارات الجواهر (30/100/1000) + الخلط المرئي لدقيقة === */
-let selectedGemsStake = 30;
-let activeShuffleInterval = null;
-
-window.selectGemsStake = function (val, btn) {
-  selectedGemsStake = val;
-  document.querySelectorAll("[data-gem-stake]").forEach((b) => b.classList.remove("active"));
-  if (btn) btn.classList.add("active");
-};
-
-// إظهار وإخفاء صناديق الذهب والجواهر عند تغيير نوع النزال
-document.querySelectorAll(".duel-mode-card").forEach((card) => {
-  card.addEventListener("click", () => {
-    setTimeout(() => {
-      document.getElementById("safeGoldStakeBox")?.classList.toggle("hidden", selectedDuelMode !== "safe");
-      document.getElementById("gemsStakeBox")?.classList.toggle("hidden", selectedDuelMode !== "stake_gems");
-    }, 10);
-  });
-});
-
-// دالة الخلط المرئي لمدة دقيقة كاملة (60 ثانية)
-function startOnlineVisibleShuffle(room) {
-  if (onlinePreviewStartedFor === room.code) return;
-  onlinePreviewStartedFor = room.code;
-  if (activeShuffleInterval) clearInterval(activeShuffleInterval);
-
-  const statusBanner = document.getElementById("onlineDuelStatus");
-  renderOnlineBoard(room, true);
-  if (statusBanner) statusBanner.textContent = "👀 احفظ أماكن البطاقات! سيبدأ الخلط خلال 4 ثوانٍ...";
-
-  setTimeout(() => {
-    renderOnlineBoard(room, false);
-    let secondsLeft = 60;
-    let cardsOrder = [...(room.cards || [])];
-    let seed = Number(room.code) || 1234;
-    const nextRand = () => {
-      seed = (seed * 9301 + 49297) % 233280;
-      return seed / 233280;
-    };
-
-    const doVisualSwap = () => {
-      const board = document.getElementById("onlineBoard");
-      if (!board || board.children.length < 6) return;
-      const i = Math.floor(nextRand() * 6);
-      let j = Math.floor(nextRand() * 6);
-      if (i === j) j = (i + 1) % 6;
-
-      [cardsOrder[i], cardsOrder[j]] = [cardsOrder[j], cardsOrder[i]];
-
-      const elA = board.children[i];
-      const elB = board.children[j];
-      const rectA = elA.getBoundingClientRect();
-      const rectB = elB.getBoundingClientRect();
-      const dx = rectB.left - rectA.left;
-      const dy = rectB.top - rectA.top;
-
-      elA.style.transition = "transform 0.35s ease";
-      elB.style.transition = "transform 0.35s ease";
-      elA.style.transform = `translate(${dx}px, ${dy}px)`;
-      elB.style.transform = `translate(${-dx}px, ${-dy}px)`;
-
-      setTimeout(() => {
-        elA.style.transition = "none";
-        elB.style.transition = "none";
-        elA.style.transform = "";
-        elB.style.transform = "";
-      }, 360);
-    };
-
-    if (statusBanner) statusBanner.textContent = `🌀 جاري خلط البطاقات... متبقي ${secondsLeft} ثانية`;
-    let tick = 0;
-    activeShuffleInterval = setInterval(async () => {
-      tick++;
-      doVisualSwap();
-      if (tick % 2 === 0) {
-        secondsLeft--;
-        if (statusBanner) statusBanner.textContent = `🌀 جاري خلط البطاقات... متبقي ${secondsLeft} ثانية`;
-      }
-      if (secondsLeft <= 0) {
-        clearInterval(activeShuffleInterval);
-        activeShuffleInterval = null;
-        if (currentRole === "p1") {
-          await db.ref(`duels/${room.code}`).update({ cards: cardsOrder, status: "playing" });
-        }
-      }
-    }, 500);
-  }, 4000);
-}
-
-// تحديث إنشاء الغرفة والدخول إليها
-const _newCreateRoom = async function () {
-  if (!db || !navigator.onLine) return showToast("⚠️ لا يوجد اتصال بالإنترنت");
-  if (characterCatalog.size < 6) {
-    await ensureRichCatalog();
-    if (characterCatalog.size < 6) return showToast("⚠️ جاري تحميل الشخصيات...");
-  }
-  const duelType = selectedDuelMode;
-  const goldStake = duelType === "safe" ? Math.max(0, Math.floor(Number(document.getElementById("inputGoldStake")?.value) || 0)) : 0;
-  const gemsStake = duelType === "stake_gems" ? selectedGemsStake : 0;
-  let stakeCard = null;
-
-  if (duelType === "safe" && goldStake > 0 && state.gold < goldStake) return showToast(`⚠️ لا تملك ${goldStake} ذهب للرهان`);
-  if (duelType === "stake_gems" && state.gems < gemsStake) return showToast(`⚠️ لا تملك ${gemsStake} جوهرة للرهان`);
-  if (duelType === "stake_card") {
-    stakeCard = state.inventory.find((c) => c.uidCard === selectedStakeCardUid);
-    if (!stakeCard) return showToast(t("msg_no_rares_to_stake"));
-  }
-
-  const code = String(Math.floor(1000 + Math.random() * 9000));
-  const boardCards = pickSixUniqueRarityCards().map((c) => ({ id: c.id, name: c.name, image: c.image, rarity: c.rarity }));
-  await db.ref(`duels/${code}`).set({
-    code, duelType, goldStake, gemsStake, status: "waiting", turn: "p1",
-    cards: boardCards, picked: ["", "", "", "", "", ""],
-    p1: { uid: state.uid, name: state.name, consent: false, stakeCard },
-    p2: null, createdAt: Date.now()
-  });
-  attachToRoom(code, "p1");
-  showToast(`✅ ${t("lbl_room_code")}: ${code}`);
-};
-
-const _newJoinRoom = async function () {
-  const code = (document.getElementById("inputRoomCode")?.value || "").trim();
-  if (!/^\d{4}$/.test(code)) return showToast("⚠️ أدخل كود من 4 أرقام");
-  if (!db || !navigator.onLine) return showToast("⚠️ لا يوجد اتصال بالإنترنت");
-  const snap = await db.ref(`duels/${code}`).get();
-  if (!snap.exists()) return showToast("❌ الغرفة غير موجودة");
-  const room = snap.val();
-  if (room.p1?.uid === state.uid) { attachToRoom(code, "p1"); return; }
-  if (room.p2 && room.p2.uid !== state.uid) return showToast("⚠️ الغرفة ممتلئة");
-
-  const reqGold = Number(room.goldStake) || 0;
-  const reqGems = Number(room.gemsStake) || 30;
-  let p2StakeCard = null;
-
-  if (room.duelType === "safe" && reqGold > 0 && state.gold < reqGold) return showToast(`⚠️ تتطلب الغرفة ${reqGold} ذهب`);
-  if (room.duelType === "stake_gems" && state.gems < reqGems) return showToast(`⚠️ تتطلب الغرفة ${reqGems} جوهرة`);
-  if (room.duelType === "stake_card") {
-    const reqRarity = room.p1?.stakeCard?.rarity;
-    p2StakeCard = state.inventory.find((c) => c.rarity === reqRarity);
-    if (!p2StakeCard) return showToast(`⚠️ تتطلب بطاقة ندرة ${reqRarity}`);
-  }
-
-  const nextStatus = (room.duelType !== "safe" || reqGold > 0) ? "consent" : "preview";
-  await db.ref(`duels/${code}`).update({
-    status: nextStatus,
-    p2: { uid: state.uid, name: state.name, consent: false, stakeCard: p2StakeCard }
-  });
-  attachToRoom(code, "p2");
-};
-
-// ربط أزرار الإنشاء والدخول بالدوال الجديدة
-const _btnCreate = document.getElementById("btnCreateRoom");
-if (_btnCreate) {
-  const _cClone = _btnCreate.cloneNode(true);
-  _btnCreate.replaceWith(_cClone);
-  _cClone.addEventListener("click", _newCreateRoom);
-}
-const _btnJoin = document.getElementById("btnJoinRoom");
-if (_btnJoin) {
-  const _jClone = _btnJoin.cloneNode(true);
-  _btnJoin.replaceWith(_jClone);
-  _jClone.addEventListener("click", _newJoinRoom);
-}
-
-// ربط عرض الغرفة بالخلط المرئي وعرض الرهان
-const _origRenderRoom = renderOnlineRoomState;
-renderOnlineRoomState = function (room) {
-  if (room.status === "preview") {
-    document.getElementById("mutualConsentBar")?.classList.add("hidden");
-    startOnlineVisibleShuffle(room);
-    return;
-  }
-  _origRenderRoom(room);
-  const stakeText = room.duelType === "stake_gems"
-    ? `${room.gemsStake || 30} 💎`
-    : (room.duelType === "safe" && room.goldStake > 0 ? `${room.goldStake} 🪙` : "✓");
-  const p1Lbl = document.getElementById("p1StakeLabel");
-  const p2Lbl = document.getElementById("p2StakeLabel");
-  if (p1Lbl && room.duelType !== "stake_card") p1Lbl.textContent = stakeText;
-  if (p2Lbl && room.p2 && room.duelType !== "stake_card") p2Lbl.textContent = stakeText;
-};
-
-// تحديث توزيع جوائز الذهب والجواهر الإضافية
-const _origFinalize = finalizeOnlineMatchRewards;
-finalizeOnlineMatchRewards = async function (room) {
-  if (rewardedRooms.has(room.code)) return;
-  await _origFinalize(room);
-  const picked = room.picked || [];
-  let p1Score = 0, p2Score = 0;
-  (room.cards || []).forEach((c, i) => {
-    const p = RANK_POWER[c.rarity] || 1;
-    if (picked[i] === "p1") p1Score += p;
-    else if (picked[i] === "p2") p2Score += p;
-  });
-  const iWon = (p1Score >= p2Score ? "p1" : "p2") === currentRole;
-  if (room.duelType === "safe" && Number(room.goldStake) > 0) {
-    const g = Number(room.goldStake);
-    state.gold = iWon ? state.gold + g : Math.max(0, state.gold - g);
-  } else if (room.duelType === "stake_gems") {
-    const extra = (Number(room.gemsStake) || 30) - 30;
-    if (extra > 0) state.gems = iWon ? state.gems + extra : Math.max(0, state.gems - extra);
-  }
-  saveState();
-  updateHud();
-};
-  /* ==========================================================================
-   الدفعة 1: معاينة 10ث + خلط سريع 15ث + حذف الألغاز (50/100/150) + تصنيف VIP + الحزم الخرافية
-   ========================================================================== */
-(function applyPhase1Upgrade() {
-  /* --- 1. تحديث وقت المعاينة (10 ثوانٍ) والخلط السريع (15 ثانية) أونلاين --- */
-  startOnlineVisibleShuffle = function (room) {
+  function startOnlineVisibleShuffle(room) {
     if (onlinePreviewStartedFor === room.code) return;
     onlinePreviewStartedFor = room.code;
+    if (activePreviewTimer) clearInterval(activePreviewTimer);
     if (activeShuffleInterval) clearInterval(activeShuffleInterval);
 
     const statusBanner = document.getElementById("onlineDuelStatus");
     renderOnlineBoard(room, true);
-
     let previewLeft = 10;
     if (statusBanner) statusBanner.textContent = `👀 احفظ أماكن البطاقات! سيبدأ الخلط خلال ${previewLeft} ثانية...`;
 
-    const previewTimer = setInterval(() => {
+    activePreviewTimer = setInterval(() => {
       previewLeft--;
       if (previewLeft > 0) {
         if (statusBanner) statusBanner.textContent = `👀 احفظ أماكن البطاقات! سيبدأ الخلط خلال ${previewLeft} ثانية...`;
       } else {
-        clearInterval(previewTimer);
+        clearInterval(activePreviewTimer); activePreviewTimer = null;
         renderOnlineBoard(room, false);
 
         let secondsLeft = 15;
         let cardsOrder = [...(room.cards || [])];
         let seed = Number(room.code) || 1234;
-        const nextRand = () => {
-          seed = (seed * 9301 + 49297) % 233280;
-          return seed / 233280;
-        };
+        const nextRand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
 
         const doFastSwap = () => {
           const board = document.getElementById("onlineBoard");
@@ -2859,26 +1727,16 @@ finalizeOnlineMatchRewards = async function (room) {
           const i = Math.floor(nextRand() * 6);
           let j = Math.floor(nextRand() * 6);
           if (i === j) j = (i + 1) % 6;
-
           [cardsOrder[i], cardsOrder[j]] = [cardsOrder[j], cardsOrder[i]];
 
-          const elA = board.children[i];
-          const elB = board.children[j];
-          const rectA = elA.getBoundingClientRect();
-          const rectB = elB.getBoundingClientRect();
-          const dx = rectB.left - rectA.left;
-          const dy = rectB.top - rectA.top;
-
-          elA.style.transition = "transform 0.15s ease";
-          elB.style.transition = "transform 0.15s ease";
-          elA.style.transform = `translate(${dx}px, ${dy}px)`;
-          elB.style.transform = `translate(${-dx}px, ${-dy}px)`;
-
+          const elA = board.children[i], elB = board.children[j];
+          const rA = elA.getBoundingClientRect(), rB = elB.getBoundingClientRect();
+          const dx = rB.left - rA.left, dy = rB.top - rA.top;
+          elA.style.transition = "transform 0.15s ease"; elB.style.transition = "transform 0.15s ease";
+          elA.style.transform = `translate(${dx}px, ${dy}px)`; elB.style.transform = `translate(${-dx}px, ${-dy}px)`;
           setTimeout(() => {
-            elA.style.transition = "none";
-            elB.style.transition = "none";
-            elA.style.transform = "";
-            elB.style.transform = "";
+            elA.style.transition = "none"; elB.style.transition = "none";
+            elA.style.transform = ""; elB.style.transform = "";
           }, 160);
         };
 
@@ -2892,752 +1750,312 @@ finalizeOnlineMatchRewards = async function (room) {
             if (statusBanner) statusBanner.textContent = `⚡ خلط فائق السرعة... متبقي ${secondsLeft} ثانية`;
           }
           if (secondsLeft <= 0) {
-            clearInterval(activeShuffleInterval);
-            activeShuffleInterval = null;
+            clearInterval(activeShuffleInterval); activeShuffleInterval = null;
             if (currentRole === "p1") {
-              await db.ref(`duels/${room.code}`).update({ cards: cardsOrder, status: "playing" });
+              await db.ref(`duels/${room.code}`).update({ cards: cardsOrder, status: "playing", turn: "p1" });
             }
           }
-        }, 200); // 5 تبديلات في الثانية = 75 تبديلة في 15 ثانية
+        }, 200);
       }
     }, 1000);
-  };
-
-  /* --- 2. زر حذف إجابة واحدة في الألغاز بتكلفة متصاعدة (50 -> 100 -> 150 ذهب) --- */
-  const HINT_COSTS = [50, 100, 150];
-  let hintUsedCount = 0;
-
-  function updateHintBtnUI(btn) {
-    if (!btn) return;
-    if (hintUsedCount >= HINT_COSTS.length) {
-      btn.disabled = true;
-      btn.textContent = "✂️ تم حذف كل الأخطاء";
-    } else {
-      btn.disabled = false;
-      btn.textContent = `✂️ حذف إجابة (${HINT_COSTS[hintUsedCount]} 🪙)`;
-    }
   }
 
-  const origHintBtn = document.getElementById("btnTrivia5050");
-  if (origHintBtn) {
-    const newHintBtn = origHintBtn.cloneNode(true);
-    origHintBtn.replaceWith(newHintBtn);
-    updateHintBtnUI(newHintBtn);
+  function renderOnlineRoomState(room) {
+    document.getElementById("p1NameLabel").textContent = room.p1?.name || "P1";
+    document.getElementById("p2NameLabel").textContent = room.p2?.name || t("msg_waiting_opp");
+    const modeTags = { safe: "🛡️ " + t("mode_safe_title"), stake_gems: "💎 " + t("mode_gems_title"), stake_card: "🔥 " + t("mode_card_title") };
+    document.getElementById("activeDuelModeTag").textContent = modeTags[room.duelType] || "⚔️";
 
-    const optionsBox = document.getElementById("triviaOptions");
-    if (optionsBox) {
-      new MutationObserver(() => {
-        hintUsedCount = 0;
-        updateHintBtnUI(newHintBtn);
-      }).observe(optionsBox, { childList: true });
-    }
+    const stakeText = room.duelType === "stake_gems" ? `${room.gemsStake || 30} 💎`
+      : (room.duelType === "safe" && room.goldStake > 0 ? `${room.goldStake} 🪙` : "✓");
+    document.getElementById("p1StakeLabel").textContent = room.p1?.stakeCard ? `${room.p1.stakeCard.name} (${room.p1.stakeCard.rarity})` : stakeText;
+    document.getElementById("p2StakeLabel").textContent = room.p2 ? (room.p2.stakeCard ? `${room.p2.stakeCard.name} (${room.p2.stakeCard.rarity})` : stakeText) : "---";
 
-    newHintBtn.addEventListener("click", () => {
-      if (hintUsedCount >= HINT_COSTS.length) return;
-      const cost = HINT_COSTS[hintUsedCount];
-      if (state.gold < cost) return showToast(`⚠️ تحتاج ${cost} ذهب لحذف إجابة`);
+    const consentBar = document.getElementById("mutualConsentBar");
+    const statusBanner = document.getElementById("onlineDuelStatus");
 
-      const optionBtns = Array.from(document.querySelectorAll("#triviaOptions button"))
-        .filter((b) => !b.disabled && b.style.visibility !== "hidden" && b.style.opacity !== "0.25");
-
-      if (optionBtns.length <= 1) return;
-
-      // تحديد الإجابة الصحيحة من بيانات السؤال الحالية أو الخاصية المرفقة
-      const correctAnswer =
-        (typeof currentTriviaAnswer !== "undefined" && currentTriviaAnswer) ||
-        (typeof currentTrivia !== "undefined" && currentTrivia?.answer) ||
-        "";
-
-      const wrongBtns = optionBtns.filter((b) => {
-        const isCorrectAttr = b.dataset.correct === "true" || b.dataset.isCorrect === "1";
-        const matchesText = correctAnswer && b.textContent.trim() === String(correctAnswer).trim();
-        return !isCorrectAttr && !matchesText;
-      });
-
-      if (wrongBtns.length === 0) return;
-
-      const victim = wrongBtns[Math.floor(Math.random() * wrongBtns.length)];
-      victim.disabled = true;
-      victim.style.opacity = "0.25";
-      victim.style.textDecoration = "line-through";
-
-      state.gold -= cost;
-      hintUsedCount++;
-      saveState();
-      updateHud();
-      playSfx("click");
-      updateHintBtnUI(newHintBtn);
-    });
-  }
-
-  /* --- 3. قائمة VIP لتصحيح تصنيف الشخصيات الأيقونية تلقائياً --- */
-  const VIP_RARITIES = {
-    "monkey d. luffy": "SP", "satoru gojo": "SP", "son goku": "SP", "guts": "SP",
-    "sung jin-woo": "SP", "ryomen sukuna": "SP", "sosuke aizen": "SP", "madara uchiha": "SP",
-    "naruto uzumaki": "UR", "sasuke uchiha": "UR", "itachi uchiha": "UR", "roronoa zoro": "UR",
-    "levi": "UR", "levi ackerman": "UR", "eren yeager": "UR", "ichigo kurosaki": "UR",
-    "light yagami": "UR", "l lawliet": "UR", "lelouch lamperouge": "UR", "saitama": "UR",
-    "kisuke urahara": "UR", "ryuk": "UR", "killua zoldyck": "UR", "hisoka morow": "UR",
-    "sebastian michaelis": "SSR", "roy mustang": "SSR", "edward elric": "SSR",
-    "keigo takami": "SSR", "shinei nouzen": "SSR", "ken kaneki": "SSR", "vegeta": "SSR"
-  };
-
-  function applyVipRarities() {
-    if (typeof characterCatalog !== "undefined" && characterCatalog?.forEach) {
-      characterCatalog.forEach((char) => {
-        const key = (char.name || "").trim().toLowerCase();
-        if (VIP_RARITIES[key]) char.rarity = VIP_RARITIES[key];
-      });
-    }
-    if (Array.isArray(state.inventory)) {
-      let changed = false;
-      state.inventory.forEach((card) => {
-        const key = (card.name || "").trim().toLowerCase();
-        if (VIP_RARITIES[key] && card.rarity !== VIP_RARITIES[key]) {
-          card.rarity = VIP_RARITIES[key];
-          changed = true;
-        }
-      });
-      if (changed) saveState();
-    }
-  }
-  applyVipRarities();
-  setInterval(applyVipRarities, 8000);
-
-  /* --- 4. تطوير المتجر + الحزم الخرافية الثلاث (SSR / UR / SP) مع أنيميشن الفتح --- */
-  const styleEl = document.createElement("style");
-  styleEl.textContent = `
-    .mythic-pack-card {
-      position: relative; overflow: hidden; border-radius: 16px; padding: 16px;
-      display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
-      background: linear-gradient(145deg, #0f172a, #1e293b);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .mythic-pack-card:active { transform: scale(0.98); }
-    .pack-ssr { border: 2px solid #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.35); }
-    .pack-ur  { border: 2px solid #ef4444; box-shadow: 0 0 22px rgba(239, 68, 68, 0.45); }
-    .pack-sp  { border: 2px solid #a855f7; box-shadow: 0 0 26px rgba(168, 85, 247, 0.6); }
-    .mythic-badge {
-      display: inline-block; padding: 3px 10px; border-radius: 999px;
-      font-size: 12px; font-weight: 800; letter-spacing: 0.5px; color: #fff;
-    }
-    .pack-ssr .mythic-badge { background: linear-gradient(90deg, #d97706, #f59e0b); }
-    .pack-ur  .mythic-badge { background: linear-gradient(90deg, #dc2626, #f97316); }
-    .pack-sp  .mythic-badge { background: linear-gradient(90deg, #7e22ce, #ec4899); }
-    #mythicOpenOverlay {
-      position: fixed; inset: 0; z-index: 99999; background: rgba(2, 6, 23, 0.92);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 20px; text-align: center; backdrop-filter: blur(6px);
-    }
-    @keyframes packShake {
-      0%, 100% { transform: rotate(0deg) scale(1); }
-      25% { transform: rotate(-6deg) scale(1.06); }
-      50% { transform: rotate(6deg) scale(1.1); }
-      75% { transform: rotate(-4deg) scale(1.06); }
-    }
-    .pack-shaking { animation: packShake 0.35s infinite; font-size: 64px; }
-  `;
-  document.head.appendChild(styleEl);
-
-  const MYTHIC_PACKS = [
-    {
-      id: "mythic_ssr", rarity: "SSR", cls: "pack-ssr", title: "👑 حزمة SSR الخرافية",
-      gems: 1000, goldReward: 15000, desc: "بطاقة SSR مضمونة + 15,000 🪙 ذهب فوري"
-    },
-    {
-      id: "mythic_ur", rarity: "UR", cls: "pack-ur", title: "🔥 حزمة UR الأسطورية",
-      gems: 2500, goldReward: 50000, desc: "بطاقة UR مضمونة + 50,000 🪙 ذهب فوري"
-    },
-    {
-      id: "mythic_sp", rarity: "SP", cls: "pack-sp", title: "🌌 حزمة SP الكونية",
-      gems: 5000, goldReward: 100000, desc: "بطاقة SP نادرة مضمونة + 100,000 🪙 ذهب فوري"
-    }
-  ];
-
-  function openMythicPack(pack) {
-    if (state.gems < pack.gems) return showToast(`⚠️ تحتاج ${pack.gems} 💎 لشراء هذه الحزمة`);
-    applyVipRarities();
-
-    const allChars = Array.from(characterCatalog.values());
-    let pool = allChars.filter((c) => c.rarity === pack.rarity);
-    if (pool.length === 0) pool = allChars;
-    if (pool.length === 0) return showToast("⚠️ انتظر تحميل الشخصيات أولاً");
-
-    const chosen = pool[Math.floor(Math.random() * pool.length)];
-    const newCard = {
-      uidCard: "crd_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
-      charId: chosen.id,
-      name: chosen.name,
-      image: chosen.image,
-      rarity: pack.rarity,
-      acquiredAt: Date.now()
-    };
-
-    state.gems -= pack.gems;
-    state.gold += pack.goldReward;
-    state.inventory.push(newCard);
-    saveState();
-    updateHud();
-    if (typeof renderInventory === "function") renderInventory(true);
-    playSfx("win");
-
-    // عرض أنيميشن فتح الحزمة
-    const overlay = document.createElement("div");
-    overlay.id = "mythicOpenOverlay";
-    overlay.innerHTML = `<div class="pack-shaking">🎁</div><h2 style="color:#fff;margin-top:16px;">جاري فتح ${pack.title}...</h2>`;
-    document.body.appendChild(overlay);
-
-    setTimeout(() => {
-      overlay.innerHTML = `
-        <div style="max-width:300px; width:100%; background:#0f172a; border-radius:18px; padding:18px; border:2px solid #f59e0b; box-shadow:0 0 35px rgba(245,158,11,0.5);">
-          <span class="mythic-badge" style="background:#f59e0b; margin-bottom:10px;">${pack.rarity}</span>
-          <img src="${newCard.image}" alt="${newCard.name}" style="width:100%; height:240px; object-fit:cover; border-radius:12px; margin-bottom:10px;" />
-          <h3 style="color:#fff; margin:6px 0;">${newCard.name}</h3>
-          <p style="color:#fbbf24; font-weight:bold; font-size:16px; margin:8px 0;">+${pack.goldReward.toLocaleString()} 🪙 ذهب!</p>
-          <button id="btnCloseMythicOverlay" class="primary-btn" style="width:100%; margin-top:10px;">رائع! استلام</button>
-        </div>
-      `;
-      document.getElementById("btnCloseMythicOverlay")?.addEventListener("click", () => overlay.remove());
-    }, 1500);
-  }
-
-  function injectMythicPacks() {
-    const grid = document.getElementById("shopPacksGrid");
-    if (!grid || grid.querySelector(".mythic-pack-card")) return;
-
-    MYTHIC_PACKS.forEach((pack) => {
-      const card = document.createElement("div");
-      card.className = `mythic-pack-card ${pack.cls}`;
-      card.innerHTML = `
-        <div>
-          <span class="mythic-badge">${pack.rarity} مضمون</span>
-          <h3 style="color:#fff; margin:8px 0 4px;">${pack.title}</h3>
-          <p style="color:#cbd5e1; font-size:13px; margin:0;">${pack.desc}</p>
-        </div>
-        <button type="button" class="primary-btn" style="width:100%; margin-top:8px;">شراء بـ ${pack.gems.toLocaleString()} 💎</button>
-      `;
-      card.querySelector("button").addEventListener("click", () => openMythicPack(pack));
-      grid.appendChild(card);
-    });
-  }
-
-  injectMythicPacks();
-  const shopGrid = document.getElementById("shopPacksGrid");
-  if (shopGrid) {
-    new MutationObserver(injectMythicPacks).observe(shopGrid, { childList: true });
-  }
-})();
-  /* === الإصلاح الشامل: تصنيف فوري متطابق + أسماء AniList + مزامنة النوادر + الألغاز + P1 === */
-(function applyHotfixPhase1V2() {
-  /* 1. قائمة VIP مطابقة لأسماء AniList الحقيقية والأسماء الشائعة */
-  const EXACT_VIP = {
-    // SP (الأساطير)
-    "monkey d. luffy": "SP", "luffy monkey": "SP",
-    "satoru gojo": "SP", "satoru gojou": "SP",
-    "son goku": "SP", "goku son": "SP",
-    "guts": "SP",
-    "sung jin-woo": "SP", "jin-u seong": "SP", "jinwoo sung": "SP",
-    "ryomen sukuna": "SP", "sukuna": "SP",
-    "sosuke aizen": "SP", "sousuke aizen": "SP",
-    "madara uchiha": "SP", "uchiha madara": "SP",
-    "levi": "SP", "levi ackerman": "SP",
-    "lelouch lamperouge": "SP", "shigeo kageyama": "SP",
-
-    // UR (نادر جداً)
-    "naruto uzumaki": "UR", "sasuke uchiha": "UR", "itachi uchiha": "UR",
-    "roronoa zoro": "UR", "zoro roronoa": "UR",
-    "eren yeager": "UR", "eren jaeger": "UR",
-    "ichigo kurosaki": "UR", "light yagami": "UR", "l lawliet": "UR",
-    "saitama": "UR", "kisuke urahara": "UR", "ryuk": "UR",
-    "killua zoldyck": "UR", "hisoka morow": "UR", "vegeta": "UR",
-    "sanji": "UR", "tanjirou kamado": "UR", "tanjiro kamado": "UR",
-
-    // SSR (ممتاز)
-    "sebastian michaelis": "SSR", "roy mustang": "SSR", "edward elric": "SSR",
-    "ken kaneki": "SSR", "robin nico": "SSR", "nico robin": "SSR",
-    "senkuu ishigami": "SSR", "manjirou sano": "SSR", "megumi fushiguro": "SSR",
-    "kusuo saiki": "SSR", "nami": "SSR", "koro-sensei": "SSR"
-  };
-
-  function calcRarityFinal(char) {
-    if (!char) return "N";
-    const exactKey = (char.name || "").trim().toLowerCase();
-    if (EXACT_VIP[exactKey]) return EXACT_VIP[exactKey];
-    const fav = Number(char.favourites ?? char.favorites ?? char.popularity ?? 0);
-    if (fav >= 30000) return "SP";
-    if (fav >= 15000) return "UR";
-    if (fav >= 7000) return "SSR";
-    if (fav >= 3000) return "SR";
-    if (fav >= 1000) return "R";
-    if (fav >= 300) return "C";
-    return "N";
-  }
-
-  // اعتراض إضافة أي شخصية جديدة (حتى مع Load More) وتصنيفها فوراً قبل العرض
-  if (typeof characterCatalog !== "undefined" && characterCatalog instanceof Map) {
-    const _origMapSet = characterCatalog.set.bind(characterCatalog);
-    characterCatalog.set = function (key, char) {
-      if (char && typeof char === "object") {
-        char.rarity = calcRarityFinal(char);
-      }
-      return _origMapSet(key, char);
-    };
-  }
-
-  function fixAllCatalogAndRefreshCodex() {
-    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
-    let changed = false;
-    characterCatalog.forEach((char) => {
-      const r = calcRarityFinal(char);
-      if (char.rarity !== r) {
-        char.rarity = r;
-        changed = true;
-      }
-    });
-    if (Array.isArray(state.inventory)) {
-      let invChanged = false;
-      state.inventory.forEach((card) => {
-        const key = (card.name || "").trim().toLowerCase();
-        if (EXACT_VIP[key] && card.rarity !== EXACT_VIP[key]) {
-          card.rarity = EXACT_VIP[key];
-          invChanged = true;
-        }
-      });
-      if (invChanged) saveState();
-    }
-    if (changed) {
-      if (typeof renderCodex === "function") renderCodex();
-      else if (typeof renderRareCodex === "function") renderRareCodex();
-    }
-  }
-
-  fixAllCatalogAndRefreshCodex();
-  setTimeout(fixAllCatalogAndRefreshCodex, 1500);
-  setTimeout(fixAllCatalogAndRefreshCodex, 4000);
-
-  // إعادة فحص التصنيف كلما فتح اللاعب تبويب النوادر
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => setTimeout(fixAllCatalogAndRefreshCodex, 150));
-  });
-
-  /* 2. مزامنة بطاقاتك النادرة (SSR / UR / SP) مع Firebase لتظهر عند الجميع */
-  async function syncMyLimitedCardsToFirebase() {
-    if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
-    const LIMITS = { SP: 1, UR: 3, SSR: 10 };
-    let updatedLocal = false;
-
-    for (const card of state.inventory) {
-      const maxSlots = LIMITS[card.rarity];
-      const cid = card.charId || card.id;
-      if (!maxSlots || !cid) continue;
-
-      try {
-        const ref = db.ref(`limitedCards/${cid}`);
-        const snap = await ref.get();
-        const owners = snap.val() || {};
-        if (Object.values(owners).some((o) => o && o.uid === state.uid)) continue;
-
-        for (let s = 1; s <= maxSlots; s++) {
-          if (!owners[s]) {
-            await db.ref(`limitedCards/${cid}/${s}`).set({
-              uid: state.uid,
-              name: state.name,
-              claimedAt: card.acquiredAt || Date.now()
-            });
-            card.serial = s;
-            updatedLocal = true;
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-    if (updatedLocal) saveState();
-  }
-  setTimeout(syncMyLimitedCardsToFirebase, 3500);
-  setInterval(syncMyLimitedCardsToFirebase, 25000);
-
-  /* 3. إصلاح زر حذف إجابة في الألغاز لمنع حذف الجواب الصحيح نهائياً */
-  const HINT_COSTS = [50, 100, 150];
-  let hintCount = 0;
-
-  function findCorrectAnswerName() {
-    const imgEl = document.getElementById("triviaImg");
-    const imgSrc = imgEl?.getAttribute("src") || imgEl?.src || "";
-    if (imgSrc && typeof characterCatalog !== "undefined") {
-      for (const char of characterCatalog.values()) {
-        if (char.image && (char.image === imgSrc || imgSrc.endsWith(char.image))) {
-          return char.name;
-        }
-      }
-    }
-    return "";
-  }
-
-  const oldBtn = document.getElementById("btnTrivia5050");
-  if (oldBtn) {
-    const safeBtn = oldBtn.cloneNode(true);
-    oldBtn.replaceWith(safeBtn);
-
-    const refreshBtn = () => {
-      if (hintCount >= HINT_COSTS.length) {
-        safeBtn.disabled = true;
-        safeBtn.textContent = "✂️ تم حذف كل الأخطاء";
-      } else {
-        safeBtn.disabled = false;
-        safeBtn.textContent = `✂️ حذف إجابة (${HINT_COSTS[hintCount]} 🪙)`;
-      }
-    };
-    refreshBtn();
-
-    const optBox = document.getElementById("triviaOptions");
-    if (optBox) {
-      new MutationObserver(() => {
-        hintCount = 0;
-        refreshBtn();
-      }).observe(optBox, { childList: true });
-    }
-
-    safeBtn.addEventListener("click", () => {
-      if (hintCount >= HINT_COSTS.length) return;
-      const cost = HINT_COSTS[hintCount];
-      if (state.gold < cost) return showToast(`⚠️ تحتاج ${cost} ذهب لحذف إجابة`);
-
-      const correctName = findCorrectAnswerName().trim().toLowerCase();
-      const activeBtns = Array.from(document.querySelectorAll("#triviaOptions button"))
-        .filter((b) => !b.disabled && b.style.opacity !== "0.25");
-
-      if (activeBtns.length <= 1) return;
-
-      const wrongBtns = activeBtns.filter((b) => {
-        const txt = b.textContent.trim().toLowerCase();
-        if (b.dataset.correct === "true" || b.dataset.isCorrect === "1") return false;
-        if (correctName && txt === correctName) return false;
-        return true;
-      });
-
-      if (!correctName || wrongBtns.length === 0 || wrongBtns.length === activeBtns.length) {
-        return showToast("⚠️ لا يمكن استخدام الحذف في هذا السؤال");
-      }
-
-      const victim = wrongBtns[Math.floor(Math.random() * wrongBtns.length)];
-      victim.disabled = true;
-      victim.style.opacity = "0.25";
-      victim.style.textDecoration = "line-through";
-
-      state.gold -= cost;
-      hintCount++;
-      saveState();
-      updateHud();
-      playSfx("click");
-      refreshBtn();
-    });
-  }
-
-  /* 4. إصلاح عدم ظهور البطاقات لمنشئ الغرفة (p1) عند بدء النزال أونلاين */
-  const _prevRenderRoom = renderOnlineRoomState;
-  renderOnlineRoomState = function (room) {
-    if (!room) return;
-    if (room.status === "waiting" || room.status === "consent") {
+    if (room.status === "waiting") {
       onlinePreviewStartedFor = null;
+      consentBar.classList.add("hidden");
+      statusBanner.textContent = `${t("lbl_room_code")}: ${room.code} — ${t("msg_waiting_opp")}`;
+      renderOnlineBoard(room, false);
+      return;
     }
+    if (room.status === "consent") {
+      onlinePreviewStartedFor = null;
+      consentBar.classList.remove("hidden");
+      statusBanner.textContent = t("consent_warn");
+      if (room.p1?.consent && room.p2?.consent && currentRole === "p1") {
+        db.ref(`duels/${room.code}/status`).set("preview");
+      }
+      renderOnlineBoard(room, false);
+      return;
+    }
+    consentBar.classList.add("hidden");
     if (room.status === "preview") {
-      document.getElementById("mutualConsentBar")?.classList.add("hidden");
-      if (onlinePreviewStartedFor !== room.code) {
-        startOnlineVisibleShuffle(room);
-        setTimeout(() => {
-          if (room.status === "preview") renderOnlineBoard(room, true);
-        }, 150);
-      }
+      startOnlineVisibleShuffle(room);
       return;
     }
-    _prevRenderRoom(room);
-  };
-})();
+    if (room.status === "playing") {
+      statusBanner.textContent = room.turn === currentRole ? t("msg_your_turn") : t("msg_opp_turn");
+      renderOnlineBoard(room, false);
+      return;
+    }
+    if (room.status === "finished") {
+      renderOnlineBoard(room, true);
+      finalizeOnlineMatchRewards(room);
+    }
+  }
 
-/* === إصلاح نهائي لمشكلة الملاك (المزامنة الموحدة) + إصلاح Guts (Kill la Kill) === */
-(function applyOwnersAndGutsFix() {
-  const LIMITS = { SP: 1, UR: 3, SSR: 10 };
-  window.__unifiedOwners = {};
-
-  /* 1. منع تصنيف Guts من Kill la Kill كـ SP (فقط Guts من Berserk يأخذ SP) */
-  function fixGutsAndWrongSP() {
-    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
-    characterCatalog.forEach((char) => {
-      const name = (char.name || "").trim().toLowerCase();
-      const anime = (char.anime || char.media || "").toLowerCase();
-      if (name === "guts" && !anime.includes("berserk")) {
-        char.rarity = "N";
-      }
+  function renderOnlineBoard(room, revealAll) {
+    const board = document.getElementById("onlineBoard");
+    if (!board) return;
+    board.innerHTML = "";
+    const pickedArr = room.picked || ["", "", "", "", "", ""];
+    (room.cards || []).forEach((card, idx) => {
+      const owner = pickedArr[idx] || "";
+      const showFace = revealAll || owner !== "";
+      const slot = document.createElement("div");
+      slot.className = "duel-slot";
+      const borderCls = owner === currentRole ? " picked-me" : owner !== "" ? " picked-opp" : "";
+      const fallback = makeFallbackSvg(card.name, card.rarity);
+      slot.innerHTML = showFace
+        ? `<div class="duel-card-inner${borderCls}"><img src="${card.image}" alt="${card.name}" onerror="this.onerror=null;this.src='${fallback}'" /><span class="card-rarity-pill r-${card.rarity}">${card.rarity}</span><div class="card-bottom-label">${card.name}</div></div>`
+        : `<div class="duel-card-inner face-down"></div>`;
+      slot.addEventListener("click", () => handleOnlineCardPick(room, idx));
+      board.appendChild(slot);
     });
   }
-  fixGutsAndWrongSP();
-  setInterval(fixGutsAndWrongSP, 5000);
 
-  /* 2. مزامنة موحدة ونظيفة للملاك في Firebase (مسار واحد للجميع بدون تكرار) */
-  async function syncCleanOwners() {
-    if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
+  async function handleOnlineCardPick(room, idx) {
+    if (room.status !== "playing" || room.turn !== currentRole) return;
+    const picked = [...(room.picked || ["", "", "", "", "", ""])];
+    if (picked[idx]) return;
+    playSfx("click");
+    picked[idx] = currentRole;
+    const p1c = picked.filter((x) => x === "p1").length;
+    const p2c = picked.filter((x) => x === "p2").length;
+    if (p1c + p2c === 6) { await db.ref(`duels/${room.code}`).update({ picked, status: "finished" }); return; }
+    let nextTurn = room.turn;
+    if (p1c === 1 && p2c === 0) nextTurn = "p2";
+    else if (p1c === 1 && p2c === 2) nextTurn = "p1";
+    else if (p1c === 3 && p2c === 2) nextTurn = "p2";
+    await db.ref(`duels/${room.code}`).update({ picked, turn: nextTurn });
+  }
 
-    const myRareByChar = new Map();
-    for (const card of state.inventory) {
-      const cid = String(card.charId || card.id || "");
-      if (!cid || !LIMITS[card.rarity]) continue;
-      if (!myRareByChar.has(cid)) myRareByChar.set(cid, card);
-    }
+  async function finalizeOnlineMatchRewards(room) {
+    if (rewardedRooms.has(room.code)) return;
+    rewardedRooms.add(room.code);
+    const picked = room.picked || [];
+    let p1Score = 0, p2Score = 0;
+    (room.cards || []).forEach((c, i) => {
+      const p = RANK_POWER[c.rarity] || 1;
+      if (picked[i] === "p1") p1Score += p; else if (picked[i] === "p2") p2Score += p;
+    });
+    const iWon = (p1Score >= p2Score ? "p1" : "p2") === currentRole;
+    const statusBanner = document.getElementById("onlineDuelStatus");
+    const gStake = Number(room.goldStake) || 0;
+    const gemStake = Number(room.gemsStake) || 30;
 
-    for (const [cid, card] of myRareByChar.entries()) {
-      try {
-        // تسجيل المالك في المسار الموحد بمفتاح uid (يمنع التكرار نهائياً)
-        await db.ref(`rareOwners/${cid}/${state.uid}`).set({
-          uid: state.uid,
-          name: state.name || "Player",
-          rarity: card.rarity,
-          updatedAt: Date.now()
-        });
-
-        // تنظيف أي تكرار قديم في المسار القديم limitedCards حتى لا يظهر 0/10 أو 5/10 خطأً
-        const oldSnap = await db.ref(`limitedCards/${cid}`).get();
-        if (oldSnap.exists()) {
-          const oldData = oldSnap.val() || {};
-          let foundMySlot = false;
-          for (const [slot, info] of Object.entries(oldData)) {
-            if (info && info.uid === state.uid) {
-              if (foundMySlot) {
-                await db.ref(`limitedCards/${cid}/${slot}`).remove();
-              } else {
-                foundMySlot = true;
-              }
-            }
-          }
+    if (iWon) {
+      state.trophies += 25; state.gold += 300 + (room.duelType === "safe" ? gStake : 0); state.gems += 5;
+      if (room.duelType === "stake_gems") state.gems += gemStake;
+      else if (room.duelType === "stake_card") {
+        const wonCard = currentRole === "p1" ? room.p2?.stakeCard : room.p1?.stakeCard;
+        if (wonCard) {
+          wonCard.acquiredAt = Date.now();
+          state.inventory.push(wonCard);
+          state.shieldUntil = Date.now() + DAY_MS;
+          showToast(`👑 +${wonCard.name}`);
         }
-      } catch (e) {}
-    }
-  }
-
-  /* 3. الاستماع المباشر للملاك من Firebase وتحديث نافذة البطاقة للجميع */
-  if (db) {
-    db.ref("rareOwners").on("value", (snap) => {
-      window.__unifiedOwners = snap.val() || {};
-    });
-    setTimeout(syncCleanOwners, 2500);
-    setInterval(syncCleanOwners, 30000);
-  }
-
-  /* 4. حقن قائمة الملاك الحقيقيين داخل نافذة تفاصيل البطاقة عند فتحها */
-  function patchOpenedModalOwners() {
-    const modal = document.querySelector(".modal:not(.hidden), #codexModal:not(.hidden), #dossierModal:not(.hidden)");
-    if (!modal) return;
-
-    const titleEl = modal.querySelector("h2, h3, .modal-title, #dossierName");
-    const charName = (titleEl?.textContent || "").trim().toLowerCase();
-    if (!charName || typeof characterCatalog === "undefined") return;
-
-    let matchedChar = null;
-    /* === إصلاح موضع صندوق الملاك + فرض التصنيف الصحيح بالشعبية داخل سجل النوادر === */
-(function applyOwnersAndRarityHardFix() {
-  const LIMITS = { SP: 1, UR: 3, SSR: 10 };
-  window.__unifiedOwners = {};
-
-  // قائمة VIP دقيقة بالاسم الكامل + التحقق من الأنمي لمنع تشابه الأسماء
-  const VIP_RULES = [
-    { names: ["monkey d. luffy", "luffy monkey"], rarity: "SP" },
-    { names: ["satoru gojo", "satoru gojou"], rarity: "SP" },
-    { names: ["son goku", "goku son"], rarity: "SP" },
-    { names: ["guts"], anime: "berserk", rarity: "SP" },
-    { names: ["sung jin-woo", "jin-u seong", "jinwoo sung"], rarity: "SP" },
-    { names: ["ryomen sukuna", "sukuna"], anime: "jujutsu", rarity: "SP" },
-    { names: ["sosuke aizen", "sousuke aizen"], rarity: "SP" },
-    { names: ["madara uchiha", "uchiha madara"], rarity: "SP" },
-    { names: ["levi", "levi ackerman"], anime: "titan", rarity: "SP" },
-    { names: ["lelouch lamperouge"], rarity: "SP" },
-    { names: ["shigeo kageyama"], rarity: "SP" },
-    { names: ["naruto uzumaki"], rarity: "UR" },
-    { names: ["sasuke uchiha", "itachi uchiha"], rarity: "UR" },
-    { names: ["roronoa zoro", "zoro roronoa"], rarity: "UR" },
-    { names: ["eren yeager", "eren jaeger"], rarity: "UR" },
-    { names: ["ichigo kurosaki"], rarity: "UR" },
-    { names: ["light yagami", "l lawliet", "ryuk"], rarity: "UR" },
-    { names: ["saitama", "kisuke urahara", "killua zoldyck", "hisoka morow", "vegeta"], rarity: "UR" },
-    { names: ["sebastian michaelis", "roy mustang", "edward elric", "ken kaneki"], rarity: "SSR" }
-  ];
-
-  function getTrueRarity(char) {
-    if (!char) return "N";
-    const name = (char.name || "").trim().toLowerCase();
-    const anime = (char.anime || char.media || char.series || "").toLowerCase();
-
-    for (const rule of VIP_RULES) {
-      if (rule.names.includes(name)) {
-        if (!rule.anime || anime.includes(rule.anime)) return rule.rarity;
       }
+      playSfx("win");
+      statusBanner.textContent = `${t("msg_win")} (${p1Score} - ${p2Score}) +25 🏆`;
+    } else {
+      state.trophies = Math.max(0, state.trophies - 10);
+      if (room.duelType === "safe" && gStake > 0) state.gold = Math.max(0, state.gold - gStake);
+      else if (room.duelType === "stake_gems") state.gems = Math.max(0, state.gems - gemStake);
+      else if (room.duelType === "stake_card") {
+        const lostCard = currentRole === "p1" ? room.p1?.stakeCard : room.p2?.stakeCard;
+        if (lostCard) state.inventory = state.inventory.filter((c) => c.uidCard !== lostCard.uidCard);
+      }
+      statusBanner.textContent = `${t("msg_lose")} (${p1Score} - ${p2Score})`;
     }
-
-    const fav = Number(char.favourites ?? char.favorites ?? char.popularity ?? char.fav ?? 0);
-    if (fav >= 30000) return "SP";
-    if (fav >= 15000) return "UR";
-    if (fav >= 7000) return "SSR";
-    if (fav >= 3000) return "SR";
-    if (fav >= 1000) return "R";
-    if (fav >= 300) return "C";
-    return "N";
+    saveState(); updateHud(); renderInventory(true); populateMyStakeCardsRow();
   }
 
-  /* 1. فرض التصنيف الصحيح في الذاكرة وإخفاء البطاقات الخاطئة من شاشة النوادر فوراً */
-  function enforceTrueRarities() {
-    if (typeof characterCatalog === "undefined" || !characterCatalog?.forEach) return;
+  /* =========================================================
+     14. التنقل، الأحداث، والتشغيل
+  ========================================================= */
+  function switchMainTab(tabId) {
+    stopPopTimer();
+    document.querySelectorAll(".tab-view").forEach((v) => v.classList.remove("active"));
+    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
+    document.getElementById(tabId)?.classList.add("active");
+    document.querySelector(`.nav-btn[data-tab="${tabId}"]`)?.classList.add("active");
+    if (tabId === "viewCards") renderInventory(false);
+    if (tabId === "viewCodex") renderCodex();
+    if (tabId === "viewOnline") populateMyStakeCardsRow();
+    if (tabId === "viewArena" && document.getElementById("soloPopPane")?.classList.contains("active")) renderPopularityGame();
+  }
 
-    const byName = new Map();
-    characterCatalog.forEach((char) => {
-      char.rarity = getTrueRarity(char);
-      const key = (char.name || "").trim().toLowerCase();
-      if (!byName.has(key)) byName.set(key, []);
-      byName.get(key).push(char);
+  function switchOnlineSubTab(paneKey) {
+    document.querySelectorAll("#viewOnline .sub-tab").forEach((b) => b.classList.toggle("active", b.dataset.online === paneKey));
+    document.querySelectorAll(".online-pane").forEach((p) => p.classList.remove("active"));
+    const map = { lobby: "onlineLobbyPane", challenges: "onlineChallengesPane", leaders: "onlineLeadersPane" };
+    document.getElementById(map[paneKey])?.classList.add("active");
+  }
+
+  function initStartScreenBackground() {
+    const bg = document.getElementById("startBgCards");
+    if (!bg) return;
+    const topChars = Array.from(characterCatalog.values()).slice(0, 9);
+    if (topChars.length) bg.innerHTML = topChars.map((c) => `<img src="${c.image}" alt="" />`).join("");
+  }
+
+  function bindAllEvents() {
+    document.getElementById("btnStartGame")?.addEventListener("click", () => {
+      document.getElementById("startScreen").classList.add("hidden");
+      document.getElementById("appShell").classList.remove("hidden");
+      updateBgmPlayback(); syncPlayerToCloud(); ensureRichCatalog();
     });
 
-    // فحص البطاقات المعروضة حالياً في شاشة النوادر وإخفاء أي بطاقة لا تستحق الفلتر
-    const activeFilterBtn = document.querySelector("#codexFilters .active, .codex-filter.active, [data-codex-rarity].active");
-    const activeText = (activeFilterBtn?.textContent || "").toUpperCase();
-    const activeFilter = activeText.includes("SP") ? "SP" : activeText.includes("UR") ? "UR" : activeText.includes("SSR") ? "SSR" : "ALL";
+    document.querySelectorAll(".lang-chip").forEach((c) => c.addEventListener("click", () => applyLanguage(c.dataset.lang)));
+    document.querySelectorAll(".nav-btn").forEach((b) => b.addEventListener("click", () => switchMainTab(b.dataset.tab)));
 
-    document.querySelectorAll("#codexGrid > *, .codex-grid > *").forEach((cardEl) => {
-      const title = (cardEl.querySelector("h3, h4, .card-name, .codex-name")?.textContent || "").trim().toLowerCase();
-      const sub = (cardEl.querySelector("p, .card-anime, .codex-anime")?.textContent || "").trim().toLowerCase();
-      const list = byName.get(title);
-      if (!list || !list.length) return;
+    document.querySelectorAll("#viewArena .sub-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        stopPopTimer();
+        document.querySelectorAll("#viewArena .sub-tab").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        document.querySelectorAll(".solo-pane").forEach((p) => p.classList.remove("active"));
+        const map = { shuffle: "soloShufflePane", trivia: "soloTriviaPane", pop: "soloPopPane" };
+        document.getElementById(map[btn.dataset.solo])?.classList.add("active");
+        if (btn.dataset.solo === "trivia") loadNextTriviaQuestion();
+        if (btn.dataset.solo === "pop") { popBetState.phase = "bet"; renderPopularityGame(); }
+      });
+    });
 
-      const matched = list.find((c) => !sub || (c.anime || "").toLowerCase().includes(sub.slice(0, 8))) || list[0];
-      const trueR = matched.rarity;
+    document.querySelectorAll(".diff-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".diff-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active"); soloDiff = btn.dataset.diff;
+      });
+    });
+    document.getElementById("btnStartSoloShuffle")?.addEventListener("click", startSoloShuffleDuel);
 
-      if (!LIMITS[trueR] || (activeFilter !== "ALL" && trueR !== activeFilter)) {
-        cardEl.style.display = "none";
-      } else {
-        cardEl.style.display = "";
+    document.querySelectorAll(".trivia-mode-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".trivia-mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active"); triviaMode = btn.dataset.tmode; loadNextTriviaQuestion();
+      });
+    });
+
+    // زر الحذف التدريجي (50 -> 100 -> 150 ذهب) — مضمون 100% ألا يحذف الجواب الصحيح
+    document.getElementById("btnTrivia5050")?.addEventListener("click", () => {
+      if (!currentTriviaAnswer || triviaHintCount >= HINT_COSTS.length) return;
+      const cost = HINT_COSTS[triviaHintCount];
+      if (state.gold < cost) return showToast(`⚠️ تحتاج ${cost} ذهب`);
+      const wrongBtns = Array.from(document.querySelectorAll("#triviaOptions .opt-btn"))
+        .filter((b) => Number(b.dataset.id) !== Number(currentTriviaAnswer.id) && !b.disabled && !b.classList.contains("eliminated"));
+      if (!wrongBtns.length) return;
+      const victim = wrongBtns[Math.floor(Math.random() * wrongBtns.length)];
+      victim.disabled = true;
+      victim.classList.add("eliminated");
+      victim.style.opacity = "0.25";
+      victim.style.textDecoration = "line-through";
+      state.gold -= cost;
+      triviaHintCount++;
+      saveState(); updateHud(); playSfx("click"); updateTriviaHintBtn();
+    });
+    document.getElementById("btnTriviaSkip")?.addEventListener("click", loadNextTriviaQuestion);
+
+    document.querySelectorAll("#viewOnline .sub-tab").forEach((b) => b.addEventListener("click", () => switchOnlineSubTab(b.dataset.online)));
+    document.querySelectorAll("#duelModeCards .duel-mode-card").forEach((cardBtn) => {
+      cardBtn.addEventListener("click", () => {
+        document.querySelectorAll("#duelModeCards .duel-mode-card").forEach((c) => c.classList.remove("active"));
+        cardBtn.classList.add("active");
+        selectedDuelMode = cardBtn.dataset.mode;
+        playSfx("click");
+        document.getElementById("myStakeCardPicker")?.classList.toggle("hidden", selectedDuelMode !== "stake_card");
+        document.getElementById("safeGoldStakeBox")?.classList.toggle("hidden", selectedDuelMode !== "safe");
+        document.getElementById("gemsStakeBox")?.classList.toggle("hidden", selectedDuelMode !== "stake_gems");
+        if (selectedDuelMode === "stake_card") populateMyStakeCardsRow();
+      });
+    });
+
+    document.getElementById("btnCreateRoom")?.addEventListener("click", createOnlineRoom);
+    document.getElementById("btnJoinRoom")?.addEventListener("click", () => joinOnlineRoom());
+    document.getElementById("btnLeaveRoom")?.addEventListener("click", () => leaveCurrentRoom(true));
+    document.getElementById("btnConfirmConsent")?.addEventListener("click", () => {
+      if (db && currentRoomCode && currentRole) { db.ref(`duels/${currentRoomCode}/${currentRole}/consent`).set(true); showToast("✅"); }
+    });
+    document.getElementById("btnDeclineConsent")?.addEventListener("click", () => leaveCurrentRoom(true));
+
+    document.getElementById("invSearch")?.addEventListener("input", (e) => { invSearchQuery = e.target.value; renderInventory(true); });
+    document.querySelectorAll("#invRarityFilters .r-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("#invRarityFilters .r-chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active"); invFilterRarity = chip.dataset.r; renderInventory(true);
+      });
+    });
+    document.getElementById("btnLoadMoreInv")?.addEventListener("click", () => { invRenderLimit += 30; renderInventory(false); });
+
+    let codexSearchTimer = null;
+    document.getElementById("codexSearch")?.addEventListener("input", (e) => {
+      codexSearch = e.target.value; renderCodex();
+      clearTimeout(codexSearchTimer);
+      if (codexSearch.trim().length >= 2 && navigator.onLine) {
+        codexSearchTimer = setTimeout(async () => { await fetchAniListPage(1, codexSearch.trim()); renderCodex(); }, 500);
       }
     });
-  }
-
-  /* 2. مزامنة الملاك الموحدة في Firebase */
-  async function syncCleanOwners() {
-    if (!db || !navigator.onLine || !Array.isArray(state.inventory)) return;
-    const seen = new Set();
-    for (const card of state.inventory) {
-      const cid = String(card.charId || card.id || "");
-      if (!cid || !LIMITS[card.rarity] || seen.has(cid)) continue;
-      seen.add(cid);
-      try {
-        await db.ref(`rareOwners/${cid}/${state.uid}`).set({
-          uid: state.uid,
-          name: state.name || "Player",
-          rarity: card.rarity,
-          updatedAt: Date.now()
-        });
-      } catch (e) {}
-    }
-  }
-
-  if (db) {
-    db.ref("rareOwners").on("value", (snap) => {
-      window.__unifiedOwners = snap.val() || {};
-    });
-    setTimeout(syncCleanOwners, 2500);
-    setInterval(syncCleanOwners, 30000);
-  }
-
-  /* 3. وضع صندوق الملاك داخل البطاقة نفسها (وليس بجانبها) */
-  function patchOpenedModalOwners() {
-    const modal = document.querySelector(".modal:not(.hidden), #codexModal:not(.hidden), #dossierModal:not(.hidden)");
-    if (!modal) return;
-
-    // إزالة أي صندوق قديم خرج بالخطأ بجانب البطاقة
-    Array.from(modal.children).forEach((ch) => {
-      if (ch.id === "unifiedOwnersBox") ch.remove();
+    document.querySelectorAll("#codexRarityFilters .r-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("#codexRarityFilters .r-chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active"); codexFilter = chip.dataset.cr; renderCodex();
+      });
     });
 
-    const innerCard = modal.firstElementChild;
-    if (!innerCard) return;
+    document.getElementById("btnCloseSummon")?.addEventListener("click", () => document.getElementById("summonModal").classList.add("hidden"));
+    document.getElementById("btnCloseCardModal")?.addEventListener("click", () => document.getElementById("cardModal").classList.add("hidden"));
+    document.getElementById("btnSettings")?.addEventListener("click", () => { updateHud(); document.getElementById("settingsModal").classList.remove("hidden"); });
+    document.getElementById("btnProfileHud")?.addEventListener("click", () => { updateHud(); document.getElementById("settingsModal").classList.remove("hidden"); });
+    document.getElementById("btnCloseSettings")?.addEventListener("click", () => document.getElementById("settingsModal").classList.add("hidden"));
 
-    const titleEl = innerCard.querySelector("h2, h3, .modal-title, #dossierName");
-    const charName = (titleEl?.textContent || "").trim().toLowerCase();
-    if (!charName || typeof characterCatalog === "undefined") return;
+    document.getElementById("btnSavePlayerName")?.addEventListener("click", () => {
+      const val = document.getElementById("inputPlayerName").value.trim();
+      if (val.length >= 2) { state.name = val; saveState(); updateHud(); showToast(t("msg_saved")); }
+    });
+    document.getElementById("btnAudioToggle")?.addEventListener("click", () => {
+      state.bgmEnabled = !state.bgmEnabled; document.getElementById("chkBgm").checked = state.bgmEnabled;
+      saveState(); updateBgmPlayback();
+    });
+    document.getElementById("chkBgm")?.addEventListener("change", (e) => { state.bgmEnabled = e.target.checked; saveState(); updateBgmPlayback(); });
+    document.getElementById("chkSfx")?.addEventListener("change", (e) => { state.sfxEnabled = e.target.checked; saveState(); });
 
-    let matchedChar = null;
-    for (const c of characterCatalog.values()) {
-      if ((c.name || "").trim().toLowerCase() === charName) {
-        matchedChar = c;
-        break;
-      }
-    }
-    if (!matchedChar) return;
-
-    const trueR = getTrueRarity(matchedChar);
-    const maxSlots = LIMITS[trueR];
-    let box = innerCard.querySelector("#unifiedOwnersBox");
-
-    if (!maxSlots) {
-      if (box) box.remove();
-      return;
-    }
-
-    const cid = String(matchedChar.id);
-    const ownersList = Object.values(window.__unifiedOwners[cid] || {}).slice(0, maxSlots);
-    const remaining = Math.max(0, maxSlots - ownersList.length);
-
-    if (!box) {
-      box = document.createElement("div");
-      box.id = "unifiedOwnersBox";
-      box.style.cssText = "width:100%; box-sizing:border-box; margin-top:12px; padding:10px; border-radius:12px; background:#0f172a; border:1px solid #334155;";
-      innerCard.appendChild(box);
-    }
-
-    const rowsHtml = ownersList.length
-      ? ownersList.map((o, idx) => {
-          const isMe = o.uid === state.uid;
-          return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; margin-top:6px; border-radius:8px; background:#1e293b; color:#fff; font-size:13px;">
-            <span>👑 #${idx + 1}/${maxSlots} ${o.name}</span>
-            ${isMe ? '<span style="color:#fbbf24; font-weight:bold;">أنت</span>' : '<span style="color:#38bdf8;">مالك</span>'}
-          </div>`;
-        }).join("")
-      : `<div style="color:#94a3b8; font-size:13px; margin-top:6px;">لا يوجد ملاك بعد — متاح بالكامل في المتجر</div>`;
-
-    box.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:bold; color:#e2e8f0;">
-        <span>👑 الملاك الموثقون (مباشر)</span>
-        <span style="color:#34d399;">متبقي: ${remaining}/${maxSlots}</span>
-      </div>
-      ${rowsHtml}
-    `;
+    window.addEventListener("online", () => { updateHud(); ensureRichCatalog(); });
+    window.addEventListener("offline", updateHud);
   }
 
-  enforceTrueRarities();
-  setInterval(enforceTrueRarities, 1200);
-  setInterval(patchOpenedModalOwners, 600);
+  loadCaches();
+  initStartScreenBackground();
+  applyLanguage(state.lang);
+  bindAllEvents();
+  initFirebaseListeners();
+  ensureRichCatalog();
 })();
 
-
-})();
 function forceOfflineEnterApp() {
   const btnStart = document.getElementById("btnStartGame");
   const startScreen = document.getElementById("startScreen");
   const appShell = document.getElementById("appShell");
-
   if (!btnStart || btnStart.dataset.offlineBound === "1") return;
   btnStart.dataset.offlineBound = "1";
-
   btnStart.addEventListener("click", () => {
-    if (startScreen) {
-      startScreen.classList.add("hidden");
-      startScreen.style.display = "none";
-    }
-    if (appShell) {
-      appShell.classList.remove("hidden");
-      appShell.style.display = "";
-    }
+    if (startScreen) { startScreen.classList.add("hidden"); startScreen.style.display = "none"; }
+    if (appShell) { appShell.classList.remove("hidden"); appShell.style.display = ""; }
   });
 }
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", forceOfflineEnterApp);
-} else {
-  forceOfflineEnterApp();
-}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", forceOfflineEnterApp);
+else forceOfflineEnterApp();
 window.addEventListener("load", forceOfflineEnterApp);
-
