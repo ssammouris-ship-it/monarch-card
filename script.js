@@ -2092,6 +2092,236 @@
     btn.textContent = t("codex_more");
   }, true);
 })();
+/* === إصلاح المشاكل الـ 6: Gokuu SP + ظهور البطاقات + التحديات + نقل الملكية + اختيار البطاقة + التوسيع بعد 4860 === */
+(function applyFinalSixFixes() {
+  /* 1. ترقية Gokuu Son إلى SP فوراً في الكتالوج والمخزون */
+  function fixGokuuRarity() {
+    const isGoku = (c) => {
+      const n = String(c?.name || "").trim().toLowerCase();
+      const a = String(c?.anime || "").toLowerCase();
+      return (n === "gokuu son" || n === "son gokuu" || n === "goku son" || n === "son goku") && (!a || a.includes("dragon ball"));
+    };
+    characterCatalog.forEach((c) => { if (isGoku(c)) c.rarity = "SP"; });
+    let invChanged = false;
+    state.inventory.forEach((c) => {
+      if (isGoku(c) && c.rarity !== "SP") {
+        c.rarity = "SP"; c.maxCopies = 1; c.serial = c.serial || 1; invChanged = true;
+      }
+    });
+    if (invChanged) saveState();
+  }
+  fixGokuuRarity();
+  setTimeout(() => { fixGokuuRarity(); renderCodex(); }, 2500);
+
+  /* 2. ضمان ظهور البطاقات مكشوفة طوال الـ 10 ثوانٍ لمنشئ الغرفة والضيف معاً */
+  const _origShuffle = startOnlineVisibleShuffle;
+  startOnlineVisibleShuffle = function (room) {
+    _origShuffle(room);
+    let checks = 0;
+    const ensureFaceUp = setInterval(() => {
+      checks++;
+      if (checks > 18 || !currentRoomCode || currentRoomCode !== room.code) {
+        clearInterval(ensureFaceUp);
+        return;
+      }
+      const statusText = document.getElementById("onlineDuelStatus")?.textContent || "";
+      if (statusText.includes("احفظ") || statusText.includes("Memorize")) {
+        const hasHidden = document.querySelector("#onlineBoard .face-down");
+        if (hasHidden) renderOnlineBoard(room, true);
+      } else {
+        clearInterval(ensureFaceUp);
+      }
+    }, 500);
+  };
+
+  /* 3. إصلاح تحدي البطاقة النادرة: إنشاء الغرفة فعلياً قبل إرسال التحدي */
+  sendDirectChallenge = async function (charId, slot, targetUid, targetName) {
+    if (!db || !navigator.onLine) return showToast("⚠️ Offline!");
+    const ch = characterCatalog.get(charId);
+    if (!ch) return;
+
+    const myMatchingCard = state.inventory.find((c) => c.rarity === ch.rarity);
+    if (!myMatchingCard) return showToast(`⚠️ تحتاج بطاقة ندرة ${ch.rarity} لتحدي ${targetName}`);
+
+    const roomCode = String(Math.floor(1000 + Math.random() * 9000));
+    const boardCards = pickSixUniqueRarityCards().map((c) => ({ id: c.id, name: c.name, image: c.image, rarity: c.rarity }));
+
+    await db.ref(`duels/${roomCode}`).set({
+      code: roomCode, duelType: "stake_card", goldStake: 0, gemsStake: 0,
+      status: "waiting", turn: "p1", cards: boardCards, picked: ["", "", "", "", "", ""],
+      p1: { uid: state.uid, name: state.name, consent: true, stakeCard: myMatchingCard },
+      p2: null, createdAt: Date.now()
+    });
+
+    const challengeId = "ch_" + Date.now();
+    await db.ref(`challenges/${targetUid}/${challengeId}`).set({
+      id: challengeId, fromUid: state.uid, fromName: state.name,
+      charId, charName: ch.name, rarity: ch.rarity, slot, roomCode,
+      status: "pending", createdAt: Date.now()
+    });
+
+    switchMainTab("viewOnline");
+    switchOnlineSubTab("lobby");
+    attachToRoom(roomCode, "p1");
+    showToast(`📩 تم إرسال التحدي وفتح الغرفة (${roomCode})`);
+  };
+
+  /* 4. اختيار بطاقة الرهان يدوياً قبل الدخول لغرفة رهان البطاقات */
+  function openManualStakePicker(reqRarity, onSelect) {
+    document.getElementById("manualStakeOverlay")?.remove();
+    const matching = state.inventory.filter((c) => c.rarity === reqRarity);
+    if (!matching.length) return showToast(`⚠️ لا تملك بطاقة ندرة ${reqRarity} للرهان`);
+
+    const overlay = document.createElement("div");
+    overlay.id = "manualStakeOverlay";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(2,6,23,0.92);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(5px);";
+    overlay.innerHTML = `
+      <div style="width:100%;max-width:360px;background:#0f172a;border:1.5px solid #f59e0b;border-radius:16px;padding:16px;max-height:80vh;overflow-y:auto;">
+        <h3 style="color:#fff;margin:0 0 10px;text-align:center;">🔥 اختر بطاقة (${reqRarity}) للرهان</h3>
+        <div id="manualStakeGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;"></div>
+        <button id="btnCancelManualStake" class="secondary-btn full-w" style="margin-top:12px;">إلغاء</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const grid = overlay.querySelector("#manualStakeGrid");
+    matching.forEach((card) => {
+      const el = document.createElement("div");
+      el.style.cssText = "background:#1e293b;border:1px solid #334155;border-radius:12px;padding:8px;text-align:center;cursor:pointer;";
+      el.innerHTML = `<img src="${card.image}" style="width:100%;height:120px;object-fit:cover;border-radius:8px;" /><div style="color:#fff;font-size:12px;font-weight:bold;margin-top:6px;">${card.name}</div><div style="color:#fbbf24;font-size:11px;">#${card.serial || 1}</div>`;
+      el.addEventListener("click", () => { overlay.remove(); onSelect(card); });
+      grid.appendChild(el);
+    });
+    overlay.querySelector("#btnCancelManualStake").addEventListener("click", () => overlay.remove());
+  }
+
+  joinOnlineRoom = async function (codeInput) {
+    const code = (codeInput || document.getElementById("inputRoomCode")?.value || "").trim();
+    if (!/^\d{4}$/.test(code)) return showToast("⚠️ أدخل كود من 4 أرقام");
+    if (!db || !navigator.onLine) return showToast("⚠️ Offline!");
+
+    const snap = await db.ref(`duels/${code}`).get();
+    if (!snap.exists()) return showToast("❌ الغرفة غير موجودة!");
+    const room = snap.val();
+    if (room.p1?.uid === state.uid) { attachToRoom(code, "p1"); return; }
+    if (room.p2 && room.p2.uid !== state.uid) return showToast("⚠️ الغرفة ممتلئة!");
+
+    const reqGold = Number(room.goldStake) || 0;
+    const reqGems = Number(room.gemsStake) || 30;
+    if (room.duelType === "safe" && reqGold > 0 && state.gold < reqGold) return showToast(t("msg_no_gold"));
+    if (room.duelType === "stake_gems" && state.gems < reqGems) return showToast(t("msg_no_gems"));
+
+    const proceedJoin = async (p2StakeCard) => {
+      const needsConsent = room.duelType !== "safe" || reqGold > 0;
+      await db.ref(`duels/${code}`).update({
+        status: needsConsent ? "consent" : "preview",
+        p2: { uid: state.uid, name: state.name, consent: !needsConsent, stakeCard: p2StakeCard }
+      });
+      attachToRoom(code, "p2");
+    };
+
+    if (room.duelType === "stake_card") {
+      const reqR = room.p1?.stakeCard?.rarity || "SSR";
+      openManualStakePicker(reqR, (chosenCard) => proceedJoin(chosenCard));
+    } else {
+      await proceedJoin(null);
+    }
+  };
+
+  const joinBtn = document.getElementById("btnJoinRoom");
+  if (joinBtn) {
+    const clone = joinBtn.cloneNode(true);
+    joinBtn.replaceWith(clone);
+    clone.addEventListener("click", () => joinOnlineRoom());
+  }
+
+  /* 5. حذف ملكية الخاسر من Firebase ونقلها للفائز فوراً عند نهاية رهان البطاقات */
+  const _origFinalizeRewards = finalizeOnlineMatchRewards;
+  finalizeOnlineMatchRewards = async function (room) {
+    if (rewardedRooms.has(room.code)) return;
+    await _origFinalizeRewards(room);
+
+    if (room.duelType === "stake_card" && db && navigator.onLine) {
+      const picked = room.picked || [];
+      let p1Score = 0, p2Score = 0;
+      (room.cards || []).forEach((c, i) => {
+        const p = RANK_POWER[c.rarity] || 1;
+        if (picked[i] === "p1") p1Score += p; else if (picked[i] === "p2") p2Score += p;
+      });
+      const iWon = (p1Score >= p2Score ? "p1" : "p2") === currentRole;
+
+      if (iWon) {
+        const wonCard = currentRole === "p1" ? room.p2?.stakeCard : room.p1?.stakeCard;
+        if (wonCard && wonCard.charId && wonCard.serial) {
+          await db.ref(`limitedCards/${wonCard.charId}/owners/${wonCard.serial}`).set({
+            uid: state.uid, name: state.name, claimedAt: Date.now(), lastActiveAt: Date.now()
+          }).catch(() => {});
+        }
+      } else {
+        const lostCard = currentRole === "p1" ? room.p1?.stakeCard : room.p2?.stakeCard;
+        if (lostCard && lostCard.charId && lostCard.serial) {
+          const snap = await db.ref(`limitedCards/${lostCard.charId}/owners/${lostCard.serial}`).get();
+          if (snap.exists() && snap.val()?.uid === state.uid) {
+            await db.ref(`limitedCards/${lostCard.charId}/owners/${lostCard.serial}`).remove().catch(() => {});
+          }
+        }
+      }
+      renderCodex();
+    }
+  };
+
+  /* 6. تجاوز حد الـ 4860 شخصية في AniList عبر التبديل التلقائي إلى الترتيب بـ ID_DESC */
+  async function fetchFreshByIdPage() {
+    if (isFetchingAniList || !navigator.onLine) return 0;
+    isFetchingAniList = true;
+    let added = 0;
+    try {
+      let idPage = Number(localStorage.getItem("monarch_anilist_id_page_v1")) || 1;
+      const query = `query ($page: Int) { Page(page: $page, perPage: 45) { characters(sort: ID_DESC) { id name { full native } image { large } description(asHtml: false) favourites media(sort: POPULARITY_DESC, perPage: 1) { nodes { title { romaji english } genres } } } } }`;
+      const res = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ query, variables: { page: idPage } })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const list = json?.data?.Page?.characters || [];
+        const before = characterCatalog.size;
+        list.forEach((item) => {
+          const img = item.image?.large || "";
+          if (!img || img.includes("default.jpg")) return;
+          const node = item.media?.nodes?.[0];
+          registerCharacter({
+            id: item.id, name: item.name?.full, nativeName: item.name?.native || "",
+            anime: node?.title?.english || node?.title?.romaji || "Anime Legend",
+            genres: node?.genres || [], favorites: item.favourites || 0, image: img,
+            bioEn: cleanDescription(item.description) || `${item.name?.full}`
+          }, false);
+        });
+        added = characterCatalog.size - before;
+        localStorage.setItem("monarch_anilist_id_page_v1", String(idPage + 1));
+        if (added > 0) { saveCharCache(); fixGokuuRarity(); updateHud(); renderCodex(); }
+      }
+    } catch (_) {} finally {
+      isFetchingAniList = false;
+    }
+    return added;
+  }
+
+  setInterval(() => { if (characterCatalog.size >= 4500) fetchFreshByIdPage(); }, 25000);
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target?.closest?.("#btnCodexMoreLive");
+    if (!btn) return;
+    e.stopImmediatePropagation();
+    btn.disabled = true;
+    btn.textContent = t("codex_searching");
+    const added = await fetchFreshByIdPage();
+    showToast(added > 0 ? `✅ تمت إضافة ${added} شخصية جديدة (المجموع: ${characterCatalog.size})` : "⏳ جاري جلب المزيد...");
+    btn.disabled = false;
+    btn.textContent = t("codex_more");
+  }, true);
+})();
 
 })();
 
