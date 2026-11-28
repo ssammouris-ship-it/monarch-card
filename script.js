@@ -4606,6 +4606,29 @@
   setTimeout(() => loadNextCatalogBatch(false), 6000);
   setInterval(() => loadNextCatalogBatch(false), 25000);
 })();
+/* === إضافة 50,000 جوهرة لحسابي مرة واحدة وحفظها === */
+(function add50kGemsOnce() {
+  const ONCE_KEY = "monarch_once_50k_gems_applied";
+  if (localStorage.getItem(ONCE_KEY) === "done") return;
+
+  function runAdd() {
+    if (typeof state === "undefined" || !state) return false;
+    state.gems = Number(state.gems || 0) + 50000;
+    localStorage.setItem(ONCE_KEY, "done");
+    if (typeof flushSaveNow === "function") flushSaveNow();
+    else if (typeof saveState === "function") saveState();
+    if (typeof updateHud === "function") updateHud();
+    if (typeof renderShop === "function") renderShop();
+    if (typeof showToast === "function") showToast("💎 +50,000");
+    return true;
+  }
+
+  if (!runAdd()) {
+    setTimeout(runAdd, 400);
+    setTimeout(runAdd, 1200);
+  }
+})();
+
 
 function forceOfflineEnterApp() {
   const btnStart = document.getElementById("btnStartGame");
