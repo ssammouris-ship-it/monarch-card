@@ -4606,27 +4606,22 @@
   setTimeout(() => loadNextCatalogBatch(false), 6000);
   setInterval(() => loadNextCatalogBatch(false), 25000);
 })();
-/* === إضافة 50,000 جوهرة لحسابي مرة واحدة وحفظها === */
-(function add50kGemsOnce() {
-  const ONCE_KEY = "monarch_once_50k_gems_applied";
-  if (localStorage.getItem(ONCE_KEY) === "done") return;
 
-  function runAdd() {
-    if (typeof state === "undefined" || !state) return false;
-    state.gems = Number(state.gems || 0) + 50000;
-    localStorage.setItem(ONCE_KEY, "done");
-    if (typeof flushSaveNow === "function") flushSaveNow();
-    else if (typeof saveState === "function") saveState();
-    if (typeof updateHud === "function") updateHud();
-    if (typeof renderShop === "function") renderShop();
-    if (typeof showToast === "function") showToast("💎 +50,000");
-    return true;
-  }
+/* === إضافة 50,000 جوهرة مباشرة في التخزين المحلي مرة واحدة === */
+(() => {
+  const FLAG = "monarch_gems_50k_done";
+  const STORAGE_KEY = "monarch_anime_legends_v3";
+  if (localStorage.getItem(FLAG) === "1") return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    data.gems = Number(data.gems || 0) + 50000;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(FLAG, "1");
+    location.reload();
+  } catch (_) {}
+})();
 
-  if (!runAdd()) {
-    setTimeout(runAdd, 400);
-    setTimeout(runAdd, 1200);
-  }
 })();
 
 
