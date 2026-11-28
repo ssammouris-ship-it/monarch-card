@@ -4607,24 +4607,6 @@
   setInterval(() => loadNextCatalogBatch(false), 25000);
 })();
 
-/* === إضافة 50,000 جوهرة مباشرة في التخزين المحلي مرة واحدة === */
-(() => {
-  const FLAG = "monarch_gems_50k_done";
-  const STORAGE_KEY = "monarch_anime_legends_v3";
-  if (localStorage.getItem(FLAG) === "1") return;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const data = raw ? JSON.parse(raw) : {};
-    data.gems = Number(data.gems || 0) + 50000;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    localStorage.setItem(FLAG, "1");
-    location.reload();
-  } catch (_) {}
-})();
-
-})();
-
-
 function forceOfflineEnterApp() {
   const btnStart = document.getElementById("btnStartGame");
   const startScreen = document.getElementById("startScreen");
